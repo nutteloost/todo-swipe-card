@@ -94,38 +94,17 @@ background_images:
   todo.home_tasks: /local/images/home_bg.jpg
 ```
 
-## Customizing Appearance
+## Customizing Pagination Dots
 
-### Background Images
+The pagination dots use your Home Assistant theme colors by default. You can customize their appearance by editing your Home Assistant theme.
 
-You can set a background image for each todo list with the `background_images` option:
-
-```yaml
-background_images:
-  todo.shopping_list: /local/images/shopping_bg.jpg
-  todo.home_tasks: /local/images/home_bg.jpg
-```
-
-### Pagination Dots
-
-The pagination dots use your Home Assistant theme colors by default. You can customize their appearance using card-mod:
+The active dot uses your `primary-color` theme variable. To change it, you can create or edit a theme in your `configuration.yaml`:
 
 ```yaml
-type: custom:todo-swipe-card
-card_mod:
-  style: |
-    .pagination-dot {
-      background-color: rgba(150, 150, 150, 0.6) !important; /* Inactive dots */
-      width: 10px !important; /* Size of dots */
-      height: 10px !important;
-    }
-    .pagination-dot.active {
-      background-color: red !important; /* Active dot */
-    }
-entities:
-  - todo.shopping_list
-  - todo.home_tasks
-show_pagination: true
+frontend:
+  themes:
+    my_custom_theme:
+      primary-color: "#ff5722"  # Change to your preferred color
 ```
 
 ## My Other Custom Cards
