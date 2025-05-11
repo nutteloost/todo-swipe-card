@@ -113,8 +113,3 @@ Check out my other custom cards for Home Assistant:
 
 * [Simple Swipe Card](https://github.com/nutteloost/simple-swipe-card) - A swipeable container card that allows you to add multiple cards and swipe between them
 * [Actions Card](https://github.com/nutteloost/actions-card) - Wraps another Home Assistant card to add tap, hold, and double-tap actions
-
-## Support
-If you find this card useful, please consider:
-* Starring the repository
-* Sharing with the community
