@@ -118,7 +118,3 @@ Check out my other custom cards for Home Assistant:
 If you find this card useful, please consider:
 * Starring the repository
 * Sharing with the community
-
-## License
-
-MIT License
