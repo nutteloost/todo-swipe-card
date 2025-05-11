@@ -19,7 +19,7 @@ Todo Swipe Card is a customizable container card for Home Assistant specifically
 - Requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed
 
 ## Installation
-
+ 
 ### HACS (Recommended)
 1. Open HACS
 2. Go to "Frontend" section
