@@ -7,7 +7,7 @@
  * Requires card-mod to be installed: https://github.com/thomasloven/lovelace-card-mod
  * 
  * @author Martijn Oost (nutteloost)
- * @version 1.5.0
+ * @version 1.5.1
  * @license MIT
  * @see {@link https://github.com/nutteloost/todo-swipe-card}
  * 
@@ -1964,7 +1964,7 @@ class TodoSwipeCardEditor extends LitElement {
         <!-- Version display -->
         <div class="version-display">
           <div class="version-text">Todo Swipe Card</div>
-          <div class="version-badge">v1.5.0</div>
+          <div class="version-badge">v1.5.1</div>
         </div>
       </div>
     `;
@@ -1993,7 +1993,7 @@ if (!registered) {
 
 // Version logging
 console.info(
-  `%c TODO-SWIPE-CARD %c v1.5.0 %c - A swipeable card for to-do lists`,
+  `%c TODO-SWIPE-CARD %c v1.5.1 %c - A swipeable card for to-do lists`,
   "color: white; background: #4caf50; font-weight: 700;",
   "color: #4caf50; background: white; font-weight: 700;",
   "color: grey; background: white; font-weight: 400;"
