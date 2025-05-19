@@ -6,8 +6,8 @@
  * 
  * Requires card-mod to be installed: https://github.com/thomasloven/lovelace-card-mod
  * 
- * @author Martijn Oost (nutteloost)
- * @version 1.5.1
+ * @author nutteloost
+ * @version 1.6.0
  * @license MIT
  * @see {@link https://github.com/nutteloost/todo-swipe-card}
  * 
@@ -66,7 +66,8 @@ class TodoSwipeCard extends HTMLElement {
       show_completed: false,
       show_completed_menu: false,
       delete_confirmation: false,
-      card_spacing: 15       // Default spacing in pixels
+      card_spacing: 15,       // Default spacing in pixels
+      custom_card_mod: {}     // Custom card-mod styling
     };
   }
   
@@ -105,6 +106,55 @@ class TodoSwipeCard extends HTMLElement {
            Array.isArray(this._config.entities) && 
            this._config.entities.length > 0 &&
            this._config.entities.some(entity => entity && entity.trim() !== "");
+  }
+
+  /**
+   * Merge internal card-mod styling with user-provided custom styling
+   * @param {Object} internalStyle - Internal card-mod style object
+   * @param {Object} customStyle - User-provided card-mod style object
+   * @returns {Object} Merged style object with custom styles taking precedence
+   * @private
+   */
+  _mergeCardModStyles(internalStyle, customStyle) {
+    // If no custom style provided, return internal style
+    if (!customStyle || Object.keys(customStyle).length === 0) {
+      return internalStyle;
+    }
+    
+    // Start with a copy of the internal style
+    const mergedStyle = JSON.parse(JSON.stringify(internalStyle));
+    
+    // Loop through all selectors in custom style
+    for (const selector in customStyle) {
+      if (selector in mergedStyle) {
+        // If the selector already exists in internal style
+        if (typeof customStyle[selector] === 'object' && 
+            typeof mergedStyle[selector] === 'object') {
+          // Handle nested objects (like the $ selector in ha-textfield)
+          if (selector === 'ha-textfield' && 
+              customStyle[selector].$ && 
+              mergedStyle[selector].$) {
+            // For special nested $ case, we need to merge CSS text
+            mergedStyle[selector].$ = mergedStyle[selector].$ + '\n' + customStyle[selector].$;
+          } else {
+            // For other objects, just override
+            mergedStyle[selector] = {...mergedStyle[selector], ...customStyle[selector]};
+          }
+        } else if (typeof customStyle[selector] === 'string' && 
+                  typeof mergedStyle[selector] === 'string') {
+          // For string CSS values, concatenate with user style at the end (to override)
+          mergedStyle[selector] = mergedStyle[selector] + '\n' + customStyle[selector];
+        } else {
+          // For any other case, override with user style
+          mergedStyle[selector] = customStyle[selector];
+        }
+      } else {
+        // If selector doesn't exist in internal style, add it
+        mergedStyle[selector] = customStyle[selector];
+      }
+    }
+    
+    return mergedStyle;
   }
 
   /**
@@ -150,6 +200,13 @@ class TodoSwipeCard extends HTMLElement {
     // Ensure background_images is an object
     if (!this._config.background_images || typeof this._config.background_images !== 'object') {
       this._config.background_images = {};
+    }
+
+    // Prioritize card_mod if available, then fall back to custom_card_mod
+    if (config.card_mod && typeof config.card_mod === 'object') {
+      this._config.custom_card_mod = config.card_mod;
+    } else if (!this._config.custom_card_mod || typeof this._config.custom_card_mod !== 'object') {
+      this._config.custom_card_mod = {};
     }
 
     debugLog("Config after processing:", JSON.stringify(this._config));
@@ -503,150 +560,159 @@ class TodoSwipeCard extends HTMLElement {
         const showCompletedMenu = this._config.show_completed_menu !== undefined ?
                                   this._config.show_completed_menu : false;
         
-        // Create the todo-list card with card-mod styling
+        // Create base internal styling
+        const internalCardModStyle = {
+          'ha-textfield': {
+            $: `
+              .mdc-text-field__input {
+                color: white !important;
+              }
+              .mdc-text-field {
+                --mdc-text-field-fill-color: transparent;
+                height: auto !important;
+                --text-field-padding: 0px 0px 5px 5px;
+              }
+              .mdc-line-ripple::before,
+              .mdc-line-ripple::after {
+                border-bottom-style: none !important;
+              }
+
+              /* === Handle enterkeyhint for mobile keyboards === */
+              const input = this.shadowRoot.querySelector('input');
+              if (input) {
+                input.enterKeyHint = 'done';
+              }
+              /* === END enterkeyhint code === */
+            `
+          },
+          '.': `
+            ha-card {
+              --mdc-typography-subtitle1-font-size: 11px;
+              ${backgroundImage ? `background: url('${backgroundImage}') no-repeat center center; background-size: cover;` : ''} 
+              box-shadow: none;
+              height: 100% !important;
+              width: 100%;
+              max-height: none;
+              overflow-y: auto;
+              border-radius: inherit;
+            }
+
+            :host {
+              --mdc-checkbox-ripple-size: 20px;
+              --mdc-text-field-idle-line-color: grey;
+              --mdc-theme-primary: grey;
+            }
+
+            ::-webkit-scrollbar {
+              display: none;
+            }
+
+            /* Hide "No tasks to do" text */
+            p.empty {
+              display: none;
+            }
+
+            /* Control the Add button visibility and position */
+            ${!showAddButton ? `
+            ha-icon-button.addButton {
+              position: absolute !important;
+              width: 1px !important;
+              height: 1px !important;
+              overflow: hidden !important;
+              opacity: 0 !important;
+              left: -9999px !important;
+              top: -9999px !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              border: none !important;
+            }` : `
+            ha-icon-button.addButton {
+              position: absolute !important;
+              right: 1px !important;
+              top: 0px !important;
+              z-index: 10 !important;
+            }`}
+
+            /* Custom header styling */
+            ha-card.type-todo-list div.header h2 {
+              display: none; /* Hide all header text (Actief and Voltooid) */
+            }
+
+            /* Enhanced hiding for all three-dots menu buttons - both headers */
+            ha-card.type-todo-list div.header ha-button-menu,
+            ha-card.type-todo-list ha-button-menu,
+            ha-button-menu {
+              display: none !important;
+              visibility: hidden !important;
+              opacity: 0 !important;
+              position: absolute !important;
+              pointer-events: none !important;
+              width: 0 !important;
+              height: 0 !important;
+              overflow: hidden !important;
+              clip: rect(0 0 0 0) !important;
+              -webkit-transform: scale(0) !important;
+              transform: scale(0) !important;
+            }
+
+            /* Hide the separator completely */
+            ha-card.type-todo-list div.divider {
+              display: none;
+            }
+
+            /* Hide completed menu header completely */
+            ha-card.type-todo-list div.header:nth-of-type(2) {
+              display: none !important;
+              visibility: hidden !important;
+              opacity: 0 !important;
+              position: absolute !important;
+              pointer-events: none !important;
+              width: 0 !important;
+              height: 0 !important;
+              overflow: hidden !important;
+              clip: rect(0 0 0 0) !important;
+            }
+
+            /* Remove extra spacing where the header used to be */
+            ha-card.type-todo-list div.header:nth-of-type(2) + div {
+              margin-top: 0;
+              padding-top: 0;
+            }
+            
+            /* Hide completed items if not configured to show */
+            ${!this._config.show_completed ? 'ha-check-list-item.editRow.completed { display: none; }' : ''}
+            
+            /* Hide reorder buttons */
+            ha-icon-button.reorderButton {
+              display: none !important;
+            }
+
+            /* Reduce height of list items */
+            ha-check-list-item {
+              min-height: 0px !important;
+            }
+
+            /* Space between checkbox and list item */  
+            ha-check-list-item {
+              --mdc-list-item-graphic-margin: 5px !important;
+            }
+          `
+        };
+
+        // Get custom card mod styling from config (prioritize card_mod if present)
+        const customCardModStyle = this._config.card_mod || this._config.custom_card_mod || {};
+
+        // Merge internal and custom styling
+        const mergedCardModStyle = this._mergeCardModStyles(internalCardModStyle, customCardModStyle);
+        
+        // Create the todo-list card with merged card-mod styling
         const cardConfig = {
           type: 'todo-list',
           entity: entityId,
           hide_create: !this._config.show_create,
           hide_completed: !this._config.show_completed,
           card_mod: {
-            style: {
-              'ha-textfield': {
-                $: `
-                  .mdc-text-field__input {
-                    color: white !important;
-                  }
-                  .mdc-text-field {
-                    --mdc-text-field-fill-color: transparent;
-                    height: auto !important;
-                    --text-field-padding: 0px 0px 5px 5px;
-                  }
-                  .mdc-line-ripple::before,
-                  .mdc-line-ripple::after {
-                    border-bottom-style: none !important;
-                  }
-
-                  /* === Handle enterkeyhint for mobile keyboards === */
-                  const input = this.shadowRoot.querySelector('input');
-                  if (input) {
-                    input.enterKeyHint = 'done';
-                  }
-                  /* === END enterkeyhint code === */
-                `
-              },
-              '.': `
-                ha-card {
-                  --mdc-typography-subtitle1-font-size: 11px;
-                  ${backgroundImage ? `background: url('${backgroundImage}') no-repeat center center; background-size: cover;` : ''} 
-                  box-shadow: none;
-                  height: 100% !important;
-                  width: 100%;
-                  max-height: none;
-                  overflow-y: auto;
-                  border-radius: inherit;
-                }
-
-                :host {
-                  --mdc-checkbox-ripple-size: 20px;
-                  --mdc-text-field-idle-line-color: grey;
-                  --mdc-theme-primary: grey;
-                }
-
-                ::-webkit-scrollbar {
-                  display: none;
-                }
-
-                /* Hide "No tasks to do" text */
-                p.empty {
-                  display: none;
-                }
-
-                /* Control the Add button visibility and position */
-                ${!showAddButton ? `
-                ha-icon-button.addButton {
-                  position: absolute !important;
-                  width: 1px !important;
-                  height: 1px !important;
-                  overflow: hidden !important;
-                  opacity: 0 !important;
-                  left: -9999px !important;
-                  top: -9999px !important;
-                  margin: 0 !important;
-                  padding: 0 !important;
-                  border: none !important;
-                }` : `
-                ha-icon-button.addButton {
-                  position: absolute !important;
-                  right: 1px !important;
-                  top: 0px !important;
-                  z-index: 10 !important;
-                }`}
-
-                /* Custom header styling */
-                ha-card.type-todo-list div.header h2 {
-                  display: none; /* Hide all header text (Actief and Voltooid) */
-                }
-
-                /* Enhanced hiding for all three-dots menu buttons - both headers */
-                ha-card.type-todo-list div.header ha-button-menu,
-                ha-card.type-todo-list ha-button-menu,
-                ha-button-menu {
-                  display: none !important;
-                  visibility: hidden !important;
-                  opacity: 0 !important;
-                  position: absolute !important;
-                  pointer-events: none !important;
-                  width: 0 !important;
-                  height: 0 !important;
-                  overflow: hidden !important;
-                  clip: rect(0 0 0 0) !important;
-                  -webkit-transform: scale(0) !important;
-                  transform: scale(0) !important;
-                }
-
-                /* Hide the separator completely */
-                ha-card.type-todo-list div.divider {
-                  display: none;
-                }
-
-                /* Hide completed menu header completely */
-                ha-card.type-todo-list div.header:nth-of-type(2) {
-                  display: none !important;
-                  visibility: hidden !important;
-                  opacity: 0 !important;
-                  position: absolute !important;
-                  pointer-events: none !important;
-                  width: 0 !important;
-                  height: 0 !important;
-                  overflow: hidden !important;
-                  clip: rect(0 0 0 0) !important;
-                }
-
-                /* Remove extra spacing where the header used to be */
-                ha-card.type-todo-list div.header:nth-of-type(2) + div {
-                  margin-top: 0;
-                  padding-top: 0;
-                }
-                
-                /* Hide completed items if not configured to show */
-                ${!this._config.show_completed ? 'ha-check-list-item.editRow.completed { display: none; }' : ''}
-                
-                /* Hide reorder buttons */
-                ha-icon-button.reorderButton {
-                  display: none !important;
-                }
-
-                /* Reduce height of list items */
-                ha-check-list-item {
-                  min-height: 0px !important;
-                }
-
-                /* Space between checkbox and list item */  
-                ha-check-list-item {
-                  --mdc-list-item-graphic-margin: 5px !important;
-                }
-              `
-            }
+            style: mergedCardModStyle
           }
         };
         
@@ -1315,6 +1381,7 @@ class TodoSwipeCardEditor extends LitElement {
     return {
       hass: { type: Object },
       _config: { type: Object },
+      _customCardModYaml: { type: String },
     };
   }
   
@@ -1378,12 +1445,19 @@ class TodoSwipeCardEditor extends LitElement {
         }
       }
       
+      // Ensure custom_card_mod is an object
+      let customCardMod = config.custom_card_mod;
+      if (!customCardMod || typeof customCardMod !== 'object') {
+        customCardMod = {};
+      }
+      
       // Merge config, overriding stub with provided values plus our cleaned entities and spacing
       this._config = {
         ...this._config,
         ...config,
         entities,
-        card_spacing: cardSpacing
+        card_spacing: cardSpacing,
+        custom_card_mod: customCardMod
       };
     }
     
@@ -1392,11 +1466,32 @@ class TodoSwipeCardEditor extends LitElement {
       this._config.background_images = {};
     }
     
+    // Initialize the YAML string for the editor
+    this._customCardModYaml = this._jsonToYaml(this._config.custom_card_mod || {});
+    
     // Debug log to help identify issues after cache clear
     debugLog("TodoSwipeCardEditor - Config after initialization:", JSON.stringify(this._config));
     
     // Force a render update to ensure entities display correctly
     this.requestUpdate();
+  }
+
+  _yamlToJson(yaml) {
+    try {
+      return yaml ? window.jsyaml.load(yaml) : {};
+    } catch (e) {
+      console.error("Error parsing YAML:", e);
+      return {};
+    }
+  }
+
+  _jsonToYaml(json) {
+    try {
+      return json ? window.jsyaml.dump(json) : '';
+    } catch (e) {
+      console.error("Error converting to YAML:", e);
+      return '';
+    }
   }
 
   get _show_pagination() {
@@ -1607,7 +1702,8 @@ class TodoSwipeCardEditor extends LitElement {
       }
       .todo-lists-container, 
       .display-options-container, 
-      .background-images-container {
+      .background-images-container,
+      .custom-card-mod-container {
         width: 100%;
       }
       
@@ -1615,6 +1711,16 @@ class TodoSwipeCardEditor extends LitElement {
         margin-left: 16px;
         padding-left: 8px;
         border-left: 1px solid var(--divider-color);
+      }
+      
+      .custom-card-mod-container {
+        margin-top: 24px;
+      }
+
+      ha-code-editor {
+        --code-mirror-height: 200px;
+        margin-top: 8px;
+        margin-bottom: 16px;
       }
     `;
   }
@@ -1649,6 +1755,29 @@ class TodoSwipeCardEditor extends LitElement {
       
       debugLog(`Card spacing changed to: ${value}`, newConfig);
       this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+    }
+  }
+
+  _customCardModChanged(ev) {
+    if (!this._config) return;
+    
+    try {
+      // Parse YAML to JSON
+      const customCardMod = this._yamlToJson(ev.target.value);
+      
+      // Create new config with updated custom_card_mod
+      const newConfig = { ...this._config, custom_card_mod: customCardMod };
+      
+      // Update internal state
+      this._config = newConfig;
+      this._customCardModYaml = ev.target.value;
+      
+      // Dispatch event
+      debugLog(`Custom card-mod styling updated`, newConfig);
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+    } catch (e) {
+      // Don't update if there's a YAML parsing error
+      console.error("Error updating custom card-mod:", e);
     }
   }
 
@@ -1961,10 +2090,33 @@ class TodoSwipeCardEditor extends LitElement {
           </div>
         ` : ''}
 
+        <!-- Custom Card-Mod Section -->
+        <div class="custom-card-mod-container">
+          <div class="section-header">Custom Card-Mod Styling</div>
+          <div class="background-help-text">
+            Enter your own card-mod styling in YAML format. This will be merged with the internal styling,
+            with your custom styles taking precedence.
+          </div>
+          <ha-code-editor
+            .hass=${this.hass}
+            .value=${this._customCardModYaml}
+            .label=${"Custom card-mod styling (YAML)"}
+            .mode=${"yaml"}
+            @value-changed=${this._customCardModChanged}
+          ></ha-code-editor>
+          <div class="background-help-text">
+            Example: To change the font size of list items, try:<br>
+            <code>'.': |<br>
+              ha-check-list-item {<br>
+                --mdc-typography-body1-font-size: 16px !important;<br>
+              }</code>
+          </div>
+        </div>
+
         <!-- Version display -->
         <div class="version-display">
           <div class="version-text">Todo Swipe Card</div>
-          <div class="version-badge">v1.5.1</div>
+          <div class="version-badge">v1.6.0</div>
         </div>
       </div>
     `;
@@ -1993,7 +2145,7 @@ if (!registered) {
 
 // Version logging
 console.info(
-  `%c TODO-SWIPE-CARD %c v1.5.1 %c - A swipeable card for to-do lists`,
+  `%c TODO-SWIPE-CARD %c v1.6.0 %c - A swipeable card for to-do lists`,
   "color: white; background: #4caf50; font-weight: 700;",
   "color: #4caf50; background: white; font-weight: 700;",
   "color: grey; background: white; font-weight: 400;"
