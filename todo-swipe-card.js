@@ -6,7 +6,7 @@
  * 
  * Requires card-mod to be installed: https://github.com/thomasloven/lovelace-card-mod
  * 
- * @author nutteloost
+ * @author Martijn Oost (nutteloost)
  * @version 1.6.0
  * @license MIT
  * @see {@link https://github.com/nutteloost/todo-swipe-card}
@@ -1381,7 +1381,6 @@ class TodoSwipeCardEditor extends LitElement {
     return {
       hass: { type: Object },
       _config: { type: Object },
-      _customCardModYaml: { type: String },
     };
   }
   
@@ -1466,32 +1465,11 @@ class TodoSwipeCardEditor extends LitElement {
       this._config.background_images = {};
     }
     
-    // Initialize the YAML string for the editor
-    this._customCardModYaml = this._jsonToYaml(this._config.custom_card_mod || {});
-    
     // Debug log to help identify issues after cache clear
     debugLog("TodoSwipeCardEditor - Config after initialization:", JSON.stringify(this._config));
     
     // Force a render update to ensure entities display correctly
     this.requestUpdate();
-  }
-
-  _yamlToJson(yaml) {
-    try {
-      return yaml ? window.jsyaml.load(yaml) : {};
-    } catch (e) {
-      console.error("Error parsing YAML:", e);
-      return {};
-    }
-  }
-
-  _jsonToYaml(json) {
-    try {
-      return json ? window.jsyaml.dump(json) : '';
-    } catch (e) {
-      console.error("Error converting to YAML:", e);
-      return '';
-    }
   }
 
   get _show_pagination() {
@@ -1712,16 +1690,6 @@ class TodoSwipeCardEditor extends LitElement {
         padding-left: 8px;
         border-left: 1px solid var(--divider-color);
       }
-      
-      .custom-card-mod-container {
-        margin-top: 24px;
-      }
-
-      ha-code-editor {
-        --code-mirror-height: 200px;
-        margin-top: 8px;
-        margin-bottom: 16px;
-      }
     `;
   }
 
@@ -1755,29 +1723,6 @@ class TodoSwipeCardEditor extends LitElement {
       
       debugLog(`Card spacing changed to: ${value}`, newConfig);
       this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
-    }
-  }
-
-  _customCardModChanged(ev) {
-    if (!this._config) return;
-    
-    try {
-      // Parse YAML to JSON
-      const customCardMod = this._yamlToJson(ev.target.value);
-      
-      // Create new config with updated custom_card_mod
-      const newConfig = { ...this._config, custom_card_mod: customCardMod };
-      
-      // Update internal state
-      this._config = newConfig;
-      this._customCardModYaml = ev.target.value;
-      
-      // Dispatch event
-      debugLog(`Custom card-mod styling updated`, newConfig);
-      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
-    } catch (e) {
-      // Don't update if there's a YAML parsing error
-      console.error("Error updating custom card-mod:", e);
     }
   }
 
@@ -2089,29 +2034,6 @@ class TodoSwipeCardEditor extends LitElement {
             })}
           </div>
         ` : ''}
-
-        <!-- Custom Card-Mod Section -->
-        <div class="custom-card-mod-container">
-          <div class="section-header">Custom Card-Mod Styling</div>
-          <div class="background-help-text">
-            Enter your own card-mod styling in YAML format. This will be merged with the internal styling,
-            with your custom styles taking precedence.
-          </div>
-          <ha-code-editor
-            .hass=${this.hass}
-            .value=${this._customCardModYaml}
-            .label=${"Custom card-mod styling (YAML)"}
-            .mode=${"yaml"}
-            @value-changed=${this._customCardModChanged}
-          ></ha-code-editor>
-          <div class="background-help-text">
-            Example: To change the font size of list items, try:<br>
-            <code>'.': |<br>
-              ha-check-list-item {<br>
-                --mdc-typography-body1-font-size: 16px !important;<br>
-              }</code>
-          </div>
-        </div>
 
         <!-- Version display -->
         <div class="version-display">
