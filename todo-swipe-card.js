@@ -6,7 +6,7 @@
  * 
  * Requires card-mod to be installed: https://github.com/thomasloven/lovelace-card-mod
  * 
- * @author Martijn Oost (nutteloost)
+ * @author nutteloost
  * @version 1.6.0
  * @license MIT
  * @see {@link https://github.com/nutteloost/todo-swipe-card}
