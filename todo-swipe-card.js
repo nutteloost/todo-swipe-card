@@ -340,17 +340,17 @@ class TodoSwipeCard extends HTMLElement {
       }
 
       .pagination-dot {
-        width: 8px;
-        height: 8px;
+        width: var(--todo-swipe-card-pagination-dot-size, 8px);
+        height: var(--todo-swipe-card-pagination-dot-size, 8px);
         border-radius: 50%;
         margin: 0 4px;
-        background-color: rgba(127, 127, 127, 0.6);
+        background-color: var(--todo-swipe-card-pagination-dot-inactive-color, rgba(127, 127, 127, 0.6));
         cursor: pointer;
         transition: background-color 0.2s ease;
       }
 
       .pagination-dot.active {
-        background-color: var(--primary-color, #03a9f4);
+        background-color: var(--todo-swipe-card-pagination-dot-active-color, var(--primary-color, #03a9f4));
       }
       
       .delete-completed-button {
