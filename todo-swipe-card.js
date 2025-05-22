@@ -51,6 +51,10 @@ class TodoSwipeCard extends HTMLElement {
     this.paginationElement = null;
     this.initialized = false;
     this.building = false;
+    this._styleCache = {}; // Cache for merged styles
+    this._menuObservers = []; // Store for observers
+    this._dynamicStyleElement = null; // For dynamic style application
+    this._pendingConfigUpdate = false; // Flag for pending config updates
   }
 
   /**
@@ -61,7 +65,6 @@ class TodoSwipeCard extends HTMLElement {
     return {
       show_pagination: true,
       show_addbutton: false,
-      show_navigation_buttons: false,
       show_create: true,
       show_completed: false,
       show_completed_menu: false,
@@ -158,6 +161,119 @@ class TodoSwipeCard extends HTMLElement {
   }
 
   /**
+   * Apply card-mod styles to the card
+   * Applies CSS variables from the card_mod style to the host element
+   * @private
+   */
+  _applyCardModStyles() {
+    // Create a style element for dynamic styles if it doesn't exist
+    if (!this._dynamicStyleElement) {
+      this._dynamicStyleElement = document.createElement('style');
+      this.shadowRoot.appendChild(this._dynamicStyleElement);
+    }
+    
+    // Generate CSS based on current config
+    if (this._config.card_mod && typeof this._config.card_mod.style === 'string') {
+      // Apply the entire card_mod style string directly to the host element
+      // This ensures transitions and other host-level properties work correctly
+      const cssText = `
+        :host {
+          ${this._config.card_mod.style}
+        }
+      `;
+      
+      this._dynamicStyleElement.textContent = cssText;
+    }
+  }
+
+  /**
+   * Extract and apply transition properties from card_mod styles
+   * @private
+   */
+  _applyTransitionProperties() {
+    if (!this.sliderElement || !this._config || !this._config.card_mod) return;
+    
+    // Debug mode to check transition properties
+    const DEBUG_TRANSITIONS = true;
+    
+    try {
+      // Default values
+      let transitionSpeed = '0.3s';
+      let transitionEasing = 'ease-out';
+      
+      // Extract transition properties from card_mod style
+      if (typeof this._config.card_mod.style === 'string') {
+        const styleString = this._config.card_mod.style;
+        
+        // Extract transition speed
+        const speedRegex = /--todo-swipe-card-transition-speed\s*:\s*([^;]+)/i;
+        const speedMatch = styleString.match(speedRegex);
+        if (speedMatch && speedMatch[1]) {
+          transitionSpeed = speedMatch[1].trim();
+          if (DEBUG_TRANSITIONS) console.log("[TodoSwipeCard] Found transition speed:", transitionSpeed);
+        }
+        
+        // Extract transition easing
+        const easingRegex = /--todo-swipe-card-transition-easing\s*:\s*([^;]+)/i;
+        const easingMatch = styleString.match(easingRegex);
+        if (easingMatch && easingMatch[1]) {
+          transitionEasing = easingMatch[1].trim();
+          if (DEBUG_TRANSITIONS) console.log("[TodoSwipeCard] Found transition easing:", transitionEasing);
+        }
+        
+        // Extract delete button color
+        const deleteButtonRegex = /--todo-swipe-card-delete-button-color\s*:\s*([^;]+)/i;
+        const deleteButtonMatch = styleString.match(deleteButtonRegex);
+        if (deleteButtonMatch && deleteButtonMatch[1]) {
+          this._deleteButtonColor = deleteButtonMatch[1].trim();
+          if (DEBUG_TRANSITIONS) console.log("[TodoSwipeCard] Found delete button color:", this._deleteButtonColor);
+          
+          // Apply to existing delete buttons
+          this._applyDeleteButtonColor();
+        }
+      }
+      
+      // Apply directly to the slider element
+      if (this.sliderElement) {
+        const transitionValue = `transform ${transitionSpeed} ${transitionEasing}`;
+        this.sliderElement.style.transition = transitionValue;
+        
+        // Store the values for later use
+        this._transitionSpeed = transitionSpeed;
+        this._transitionEasing = transitionEasing;
+        
+        if (DEBUG_TRANSITIONS) {
+          console.log("[TodoSwipeCard] Applied transition:", transitionValue);
+          console.log("[TodoSwipeCard] Current transition:", getComputedStyle(this.sliderElement).transition);
+        }
+      }
+    } catch (e) {
+      console.error("Error applying transition properties:", e);
+    }
+  }
+
+
+  /**
+   * Apply delete button color to all existing delete buttons
+   * @private
+   */
+  _applyDeleteButtonColor() {
+    if (!this._deleteButtonColor) return;
+    
+    // Find all delete buttons and apply the color
+    const deleteButtons = this.shadowRoot.querySelectorAll('.delete-completed-button');
+    deleteButtons.forEach(button => {
+      button.style.color = this._deleteButtonColor;
+      
+      // Also apply to the SVG inside
+      const svg = button.querySelector('svg');
+      if (svg) {
+        svg.style.fill = this._deleteButtonColor;
+      }
+    });
+  }
+
+  /**
    * Set card configuration
    * @param {Object} config - Card configuration
    */
@@ -215,6 +331,138 @@ class TodoSwipeCard extends HTMLElement {
     if (this.initialized) {
       debugLog("Rebuilding TodoSwipeCard due to config change");
       this._build();
+      
+      // Apply transition properties after rebuild
+      setTimeout(() => {
+        this._applyTransitionProperties();
+        this._applyDeleteButtonColor();
+      }, 100);
+    }
+  }
+
+  /**
+   * Updates specific card features without a full rebuild
+   * Used for minor configuration changes
+   * @param {Object} oldConfig - Previous configuration
+   * @private
+   */
+  _updateFromConfig(oldConfig) {
+    debugLog("Applying minor config updates");
+    
+    // Update show_completed setting
+    if (this._config.show_completed !== oldConfig.show_completed) {
+      this.cards.forEach(card => {
+        if (card.element && card.element.shadowRoot) {
+          const items = card.element.shadowRoot.querySelectorAll('ha-check-list-item.editRow.completed');
+          items.forEach(item => {
+            item.style.display = this._config.show_completed ? '' : 'none';
+          });
+        }
+      });
+    }
+    
+    // Update show_completed_menu setting
+    if (this._config.show_completed_menu !== oldConfig.show_completed_menu || 
+        this._config.show_completed !== oldConfig.show_completed) {
+      this.cards.forEach((card, index) => {
+        const slide = card.slide;
+        if (!slide) return;
+        
+        // Remove existing delete buttons
+        const oldButtons = slide.querySelectorAll('.delete-completed-button');
+        oldButtons.forEach(btn => btn.remove());
+        
+        // Add delete button if configured to show completed items and menu
+        if (this._config.show_completed && this._config.show_completed_menu) {
+          const deleteButton = document.createElement('button');
+          deleteButton.className = 'delete-completed-button';
+          deleteButton.title = 'Delete completed items';
+          deleteButton.innerHTML = `
+            <svg viewBox="0 0 24 24">
+              <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
+            </svg>
+          `;
+          
+          // Add click handler for the delete button with confirmation dialog
+          deleteButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Check if confirmation is required
+            if (this._config.delete_confirmation) {
+              // Create confirmation dialog
+              const dialog = document.createElement('ha-dialog');
+              dialog.heading = 'Confirm Deletion';
+              dialog.open = true;
+              
+              // Create content container
+              const content = document.createElement('div');
+              content.innerText = 'Are you sure you want to delete all completed items from the list?';
+              dialog.appendChild(content);
+              
+              // Create confirm button
+              const confirmButton = document.createElement('mwc-button');
+              confirmButton.slot = 'primaryAction';
+              confirmButton.label = 'Confirm';
+              confirmButton.style.color = 'var(--primary-color)';
+              confirmButton.setAttribute('aria-label', 'Confirm');
+              
+              // Add confirm button click handler
+              confirmButton.addEventListener('click', () => {
+                dialog.parentNode.removeChild(dialog);
+                if (this._hass) {
+                  this._hass.callService('todo', 'remove_completed_items', {
+                    entity_id: card.entityId
+                  });
+                }
+              });
+              
+              // Create cancel button
+              const cancelButton = document.createElement('mwc-button');
+              cancelButton.slot = 'secondaryAction';
+              cancelButton.label = 'Cancel';
+              cancelButton.setAttribute('aria-label', 'Cancel');
+              
+              // Add cancel button click handler
+              cancelButton.addEventListener('click', () => {
+                dialog.parentNode.removeChild(dialog);
+              });
+              
+              // Append buttons to dialog
+              dialog.appendChild(confirmButton);
+              dialog.appendChild(cancelButton);
+              
+              // Add dialog to document
+              document.body.appendChild(dialog);
+            } else {
+              // No confirmation needed, delete immediately
+              if (this._hass) {
+                this._hass.callService('todo', 'remove_completed_items', {
+                  entity_id: card.entityId
+                });
+              }
+            }
+          });
+          
+          slide.appendChild(deleteButton);
+        }
+      });
+    }
+    
+    // Update card spacing
+    if (this._config.card_spacing !== oldConfig.card_spacing) {
+      if (this.sliderElement) {
+        this.sliderElement.style.gap = `${this._config.card_spacing}px`;
+        this.updateSlider(false); // Update without animation
+      }
+    }
+    
+    // Apply pagination styles if they changed
+    if (this._config.card_mod !== oldConfig.card_mod) {
+      this._applyCardModStyles();
+      if (this.paginationElement) {
+        this._applyPaginationStyles();
+      }
     }
   }
 
@@ -247,24 +495,56 @@ class TodoSwipeCard extends HTMLElement {
   connectedCallback() {
     if (!this.initialized) {
       debugLog("TodoSwipeCard connecting and building");
+      this._applyCardModStyles(); // Apply styles first for transitions
       this._build();
     }
   }
 
   /**
    * Called when the element is disconnected from the DOM
+   * Improved cleanup for better memory management
    */
   disconnectedCallback() {
     debugLog("TodoSwipeCard disconnecting");
+    
+    // Clear resize observer
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
     
-    // Clear menu button removal interval
-    if (this._menuCheckInterval) {
-      clearInterval(this._menuCheckInterval);
-      this._menuCheckInterval = null;
+    // Clear style cache
+    this._styleCache = null;
+    
+    // Clean up menu observers
+    if (this._menuObservers) {
+      this._menuObservers.forEach(observer => observer.disconnect());
+      this._menuObservers = [];
+    }
+    
+    // Properly remove swipe gesture handlers
+    if (this.cardContainer) {
+      if (this._touchStartHandler) {
+        this.cardContainer.removeEventListener('touchstart', this._touchStartHandler);
+        this.cardContainer.removeEventListener('touchmove', this._touchMoveHandler);
+        this.cardContainer.removeEventListener('touchend', this._touchEndHandler);
+        this.cardContainer.removeEventListener('touchcancel', this._touchEndHandler);
+        this.cardContainer.removeEventListener('mousedown', this._mouseDownHandler);
+      }
+      
+      // Clean up window event listeners that might have been added
+      window.removeEventListener('mousemove', this._mouseMoveHandler);
+      window.removeEventListener('mouseup', this._mouseUpHandler);
+    }
+    
+    // Clean up card elements 
+    if (this.cards) {
+      this.cards.forEach(card => {
+        if (card && card.element) {
+          // Explicitly set hass to null to help garbage collection
+          card.element.hass = null;
+        }
+      });
     }
     
     this.initialized = false;
@@ -273,7 +553,7 @@ class TodoSwipeCard extends HTMLElement {
   }
 
   /**
-   * Build the card UI
+   * Build the card UI with optimized DOM handling
    * @private
    */
   async _build() {
@@ -286,6 +566,8 @@ class TodoSwipeCard extends HTMLElement {
     this.building = true;
     debugLog("Starting build...");
 
+    // Use document fragment for better performance
+    const fragment = document.createDocumentFragment();
     const root = this.shadowRoot;
     root.innerHTML = ''; // Clear previous content
 
@@ -298,7 +580,8 @@ class TodoSwipeCard extends HTMLElement {
         overflow: hidden;
         width: 100%;
         height: 100%;
-        border-radius: var(--ha-card-border-radius, 12px);
+        --card-border-radius: var(--ha-card-border-radius, 12px);
+        border-radius: var(--card-border-radius);
       }
 
       .card-container {
@@ -306,7 +589,11 @@ class TodoSwipeCard extends HTMLElement {
         width: 100%;
         height: 100%;
         overflow: hidden;
-        border-radius: inherit;
+        border-radius: var(--card-border-radius);
+      }
+      
+      .card-container, .slide, ha-card {
+        border-radius: var(--card-border-radius) !important;
       }
 
       .slider {
@@ -325,25 +612,26 @@ class TodoSwipeCard extends HTMLElement {
         overflow: hidden;
         height: 100%;
         box-sizing: border-box;
-        border-radius: inherit;
-        background: var(--ha-card-background, var(--card-background-color, white));
+        border-radius: var(--card-border-radius);
+        background: var(--todo-swipe-card-background, var(--ha-card-background, var(--card-background-color, white)));
       }
 
       .pagination {
         position: absolute;
-        bottom: 8px;
+        bottom: var(--todo-swipe-card-pagination-bottom, 8px);
         left: 0;
         right: 0;
         display: flex;
         justify-content: center;
         z-index: 1;
+        background-color: var(--todo-swipe-card-pagination-background, transparent);
       }
 
       .pagination-dot {
         width: var(--todo-swipe-card-pagination-dot-size, 8px);
         height: var(--todo-swipe-card-pagination-dot-size, 8px);
-        border-radius: 50%;
-        margin: 0 4px;
+        border-radius: var(--todo-swipe-card-pagination-dot-border-radius, 50%);
+        margin: 0 var(--todo-swipe-card-pagination-dot-spacing, 4px);
         background-color: var(--todo-swipe-card-pagination-dot-inactive-color, rgba(127, 127, 127, 0.6));
         cursor: pointer;
         transition: background-color 0.2s ease;
@@ -351,6 +639,8 @@ class TodoSwipeCard extends HTMLElement {
 
       .pagination-dot.active {
         background-color: var(--todo-swipe-card-pagination-dot-active-color, var(--primary-color, #03a9f4));
+        width: calc(var(--todo-swipe-card-pagination-dot-size, 8px) * var(--todo-swipe-card-pagination-dot-active-size-multiplier, 1));
+        height: calc(var(--todo-swipe-card-pagination-dot-size, 8px) * var(--todo-swipe-card-pagination-dot-active-size-multiplier, 1));
       }
       
       .delete-completed-button {
@@ -363,7 +653,7 @@ class TodoSwipeCard extends HTMLElement {
         padding: 4px;
         background-color: transparent;
         border: none;
-        color: var(--primary-text-color);
+        color: var(--todo-swipe-card-delete-button-color, var(--primary-text-color));
         cursor: pointer;
         border-radius: 50%;
         width: 36px;
@@ -453,7 +743,12 @@ class TodoSwipeCard extends HTMLElement {
       }
     `;
     
-    root.appendChild(style);
+    fragment.appendChild(style);
+    
+    // Re-add the dynamic style element if it exists
+    if (this._dynamicStyleElement) {
+      fragment.appendChild(this._dynamicStyleElement);
+    }
 
     // Check if we should show the preview (no valid entities configured)
     if (!this._hasValidEntities()) {
@@ -501,7 +796,8 @@ class TodoSwipeCard extends HTMLElement {
       previewContainer.appendChild(textContainer);
       previewContainer.appendChild(actionsContainer);
       
-      root.appendChild(previewContainer);
+      fragment.appendChild(previewContainer);
+      root.appendChild(fragment);
       
       this.initialized = true;
       this.building = false;
@@ -520,404 +816,24 @@ class TodoSwipeCard extends HTMLElement {
     this.sliderElement = document.createElement('div');
     this.sliderElement.className = 'slider';
     this.cardContainer.appendChild(this.sliderElement);
+    fragment.appendChild(this.cardContainer);
 
     // Load card helpers
     const helpers = await window.loadCardHelpers();
     if (!helpers) {
         console.error("TodoSwipeCard: Card helpers not loaded");
-        root.innerHTML = `<ha-alert alert-type="error">Card Helpers are required for this card to function.</ha-alert>`;
+        const errorAlert = document.createElement('ha-alert');
+        errorAlert.setAttribute('alert-type', 'error');
+        errorAlert.textContent = "Card Helpers are required for this card to function.";
+        root.appendChild(errorAlert);
         this.building = false;
         this.initialized = false;
         return;
     }
     this.cards = [];
 
-    // Create slides for each todo entity
-    const cardPromises = this._config.entities.map(async (entityId, i) => {
-      if (!entityId || entityId.trim() === "") {
-        debugLog("Skipping empty entity at index", i);
-        return null;
-      }
-
-      debugLog("Creating card for entity:", entityId);
-      const slideDiv = document.createElement('div');
-      slideDiv.className = 'slide';
-
-      try {
-        // Generate entity-specific class name for styling
-        const entityName = entityId.split('.').pop().replace(/_/g, '-');
-        
-        // Get background image if configured
-        const backgroundImage = this._config.background_images && 
-                            this._config.background_images[entityId] ? 
-                            this._config.background_images[entityId] : null;
-        
-        // Determine if Add button should be shown or hidden
-        const showAddButton = this._config.show_addbutton !== undefined ? 
-                              this._config.show_addbutton : false;
-
-        // Determine if completed menu should be shown or hidden
-        const showCompletedMenu = this._config.show_completed_menu !== undefined ?
-                                  this._config.show_completed_menu : false;
-        
-        // Create base internal styling
-        const internalCardModStyle = {
-          'ha-textfield': {
-            $: `
-              .mdc-text-field__input {
-                color: white !important;
-              }
-              .mdc-text-field {
-                --mdc-text-field-fill-color: transparent;
-                height: auto !important;
-                --text-field-padding: 0px 0px 5px 5px;
-              }
-              .mdc-line-ripple::before,
-              .mdc-line-ripple::after {
-                border-bottom-style: none !important;
-              }
-
-              /* === Handle enterkeyhint for mobile keyboards === */
-              const input = this.shadowRoot.querySelector('input');
-              if (input) {
-                input.enterKeyHint = 'done';
-              }
-              /* === END enterkeyhint code === */
-            `
-          },
-          '.': `
-            ha-card {
-              --mdc-typography-subtitle1-font-size: 11px;
-              ${backgroundImage ? `background: url('${backgroundImage}') no-repeat center center; background-size: cover;` : ''} 
-              box-shadow: none;
-              height: 100% !important;
-              width: 100%;
-              max-height: none;
-              overflow-y: auto;
-              border-radius: inherit;
-            }
-
-            :host {
-              --mdc-checkbox-ripple-size: 20px;
-              --mdc-text-field-idle-line-color: grey;
-              --mdc-theme-primary: grey;
-            }
-
-            ::-webkit-scrollbar {
-              display: none;
-            }
-
-            /* Hide "No tasks to do" text */
-            p.empty {
-              display: none;
-            }
-
-            /* Control the Add button visibility and position */
-            ${!showAddButton ? `
-            ha-icon-button.addButton {
-              position: absolute !important;
-              width: 1px !important;
-              height: 1px !important;
-              overflow: hidden !important;
-              opacity: 0 !important;
-              left: -9999px !important;
-              top: -9999px !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              border: none !important;
-            }` : `
-            ha-icon-button.addButton {
-              position: absolute !important;
-              right: 1px !important;
-              top: 0px !important;
-              z-index: 10 !important;
-            }`}
-
-            /* Custom header styling */
-            ha-card.type-todo-list div.header h2 {
-              display: none; /* Hide all header text (Actief and Voltooid) */
-            }
-
-            /* Enhanced hiding for all three-dots menu buttons - both headers */
-            ha-card.type-todo-list div.header ha-button-menu,
-            ha-card.type-todo-list ha-button-menu,
-            ha-button-menu {
-              display: none !important;
-              visibility: hidden !important;
-              opacity: 0 !important;
-              position: absolute !important;
-              pointer-events: none !important;
-              width: 0 !important;
-              height: 0 !important;
-              overflow: hidden !important;
-              clip: rect(0 0 0 0) !important;
-              -webkit-transform: scale(0) !important;
-              transform: scale(0) !important;
-            }
-
-            /* Hide the separator completely */
-            ha-card.type-todo-list div.divider {
-              display: none;
-            }
-
-            /* Hide completed menu header completely */
-            ha-card.type-todo-list div.header:nth-of-type(2) {
-              display: none !important;
-              visibility: hidden !important;
-              opacity: 0 !important;
-              position: absolute !important;
-              pointer-events: none !important;
-              width: 0 !important;
-              height: 0 !important;
-              overflow: hidden !important;
-              clip: rect(0 0 0 0) !important;
-            }
-
-            /* Remove extra spacing where the header used to be */
-            ha-card.type-todo-list div.header:nth-of-type(2) + div {
-              margin-top: 0;
-              padding-top: 0;
-            }
-            
-            /* Hide completed items if not configured to show */
-            ${!this._config.show_completed ? 'ha-check-list-item.editRow.completed { display: none; }' : ''}
-            
-            /* Hide reorder buttons */
-            ha-icon-button.reorderButton {
-              display: none !important;
-            }
-
-            /* Reduce height of list items */
-            ha-check-list-item {
-              min-height: 0px !important;
-            }
-
-            /* Space between checkbox and list item */  
-            ha-check-list-item {
-              --mdc-list-item-graphic-margin: 5px !important;
-            }
-          `
-        };
-
-        // Get custom card mod styling from config (prioritize card_mod if present)
-        const customCardModStyle = this._config.card_mod || this._config.custom_card_mod || {};
-
-        // Merge internal and custom styling
-        const mergedCardModStyle = this._mergeCardModStyles(internalCardModStyle, customCardModStyle);
-        
-        // Create the todo-list card with merged card-mod styling
-        const cardConfig = {
-          type: 'todo-list',
-          entity: entityId,
-          hide_create: !this._config.show_create,
-          hide_completed: !this._config.show_completed,
-          card_mod: {
-            style: mergedCardModStyle
-          }
-        };
-        
-        const cardElement = await helpers.createCardElement(cardConfig);
-        
-        // Pass hass immediately if available
-        if (this._hass) {
-          cardElement.hass = this._hass;
-        }
-        
-        // Setup the input field properly using a dedicated function
-        const enhanceInputField = () => {
-          if (!cardElement || !cardElement.shadowRoot) return;
-          
-          const textField = cardElement.shadowRoot.querySelector('ha-textfield');
-          if (!textField || !textField.shadowRoot) return;
-          
-          const inputElement = textField.shadowRoot.querySelector('input');
-          if (!inputElement) return;
-          
-          // Set enterKeyHint without using CSS template string
-          inputElement.enterKeyHint = 'done';
-          
-          // Add a focused class to improve touch response
-          textField.addEventListener('click', () => {
-            if (inputElement) {
-              inputElement.focus();
-            }
-          });
-          
-          debugLog("Enhanced input field setup successfully");
-        };
-        
-        // Call enhancement function now
-        enhanceInputField();
-        
-        // Also set up a delayed call to handle cases where the DOM isn't fully ready
-        setTimeout(enhanceInputField, 500);
-        
-        // Store reference to the card
-        this.cards[i] = {
-          element: cardElement,
-          slide: slideDiv,
-          entityId: entityId
-        };
-        
-        // Add card to slide
-        slideDiv.appendChild(cardElement);
-        
-        // Add custom delete button if configured to show completed items and menu
-        if (this._config.show_completed && showCompletedMenu) {
-          const deleteButton = document.createElement('button');
-          deleteButton.className = 'delete-completed-button';
-          deleteButton.title = 'Delete completed items';
-          deleteButton.innerHTML = `
-            <svg viewBox="0 0 24 24">
-              <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
-            </svg>
-          `;
-          
-          // Add click handler for the delete button with confirmation dialog
-          deleteButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Check if confirmation is required
-            if (this._config.delete_confirmation) {
-              // Create confirmation dialog
-              const dialog = document.createElement('ha-dialog');
-              dialog.heading = 'Confirm Deletion';
-              dialog.open = true;
-              
-              // Create content container
-              const content = document.createElement('div');
-              content.innerText = 'Are you sure you want to delete all completed items from the list?';
-              dialog.appendChild(content);
-              
-              // Create confirm button
-              const confirmButton = document.createElement('mwc-button');
-              confirmButton.slot = 'primaryAction';
-              confirmButton.label = 'Confirm';
-              confirmButton.style.color = 'var(--primary-color)';
-              confirmButton.setAttribute('aria-label', 'Confirm');
-              
-              // Add confirm button click handler
-              confirmButton.addEventListener('click', () => {
-                dialog.parentNode.removeChild(dialog);
-                if (this._hass) {
-                  this._hass.callService('todo', 'remove_completed_items', {
-                    entity_id: entityId
-                  });
-                }
-              });
-              
-              // Create cancel button
-              const cancelButton = document.createElement('mwc-button');
-              cancelButton.slot = 'secondaryAction';
-              cancelButton.label = 'Cancel';
-              cancelButton.setAttribute('aria-label', 'Cancel');
-              
-              // Add cancel button click handler
-              cancelButton.addEventListener('click', () => {
-                dialog.parentNode.removeChild(dialog);
-              });
-              
-              // Append buttons to dialog
-              dialog.appendChild(confirmButton);
-              dialog.appendChild(cancelButton);
-              
-              // Add dialog to document
-              document.body.appendChild(dialog);
-            } else {
-              // No confirmation needed, delete immediately
-              if (this._hass) {
-                this._hass.callService('todo', 'remove_completed_items', {
-                  entity_id: entityId
-                });
-              }
-            }
-          });
-          
-          slideDiv.appendChild(deleteButton);
-        }
-        
-        this.sliderElement.appendChild(slideDiv);
-        
-        // Add a function to recursively scan and remove all menu buttons
-        const removeMenuButtons = (element) => {
-          // Function to process an element and its shadow DOM
-          const processElement = (el) => {
-            if (!el) return;
-            
-            // Find all ha-button-menu elements in the current DOM
-            const menuButtons = el.querySelectorAll('ha-button-menu');
-            if (menuButtons) {
-              menuButtons.forEach(btn => {
-                if (btn && btn.parentNode) {
-                  debugLog("Removing menu button");
-                  btn.style.display = 'none';
-                  btn.style.visibility = 'hidden';
-                  btn.style.position = 'absolute';
-                  btn.style.pointerEvents = 'none';
-                }
-              });
-            }
-            
-            // Handle header elements that might contain menu buttons
-            const headers = el.querySelectorAll('.header');
-            if (headers) {
-              headers.forEach(header => {
-                const headerMenus = header.querySelectorAll('ha-button-menu');
-                headerMenus.forEach(menu => {
-                  if (menu && menu.parentNode) {
-                    debugLog("Removing header menu button");
-                    menu.style.display = 'none';
-                    menu.style.visibility = 'hidden';
-                    menu.style.position = 'absolute';
-                    menu.style.pointerEvents = 'none';
-                  }
-                });
-              });
-            }
-            
-            // Process shadow DOM if available
-            if (el.shadowRoot) {
-              processElement(el.shadowRoot);
-            }
-            
-            // Process all child elements that might have shadow DOM
-            Array.from(el.children).forEach(child => {
-              if (child.shadowRoot) {
-                processElement(child);
-              }
-            });
-          };
-          
-          // Start processing from the given element
-          processElement(element);
-        };
-        
-        // Wait for the card to be fully rendered and remove menu buttons
-        setTimeout(() => {
-          try {
-            removeMenuButtons(cardElement);
-          } catch (e) {
-            console.error("Error removing menu buttons:", e);
-          }
-        }, 500);
-        
-      } catch (e) {
-        console.error(`Error creating card ${i}:`, entityId, e);
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = "color: red; background: white; padding: 16px; border: 1px solid red; height: 100%; box-sizing: border-box;";
-        errorDiv.textContent = `Error creating card: ${e.message || e}. Check console for details.`;
-        slideDiv.appendChild(errorDiv);
-        this.sliderElement.appendChild(slideDiv);
-        this.cards[i] = { error: true, slide: slideDiv };
-      }
-    });
-
-    // Wait for all cards to be processed
-    await Promise.allSettled(cardPromises);
-
-    // Filter out any potential gaps if errors occurred
-    this.cards = this.cards.filter(Boolean);
+    // Create slides for each todo entity in parallel - using a more efficient approach
+    await this._createTodoCards(helpers);
 
     // Create pagination if enabled (and more than one card)
     if (this._config.show_pagination !== false && this.cards.length > 1) {
@@ -938,11 +854,15 @@ class TodoSwipeCard extends HTMLElement {
       }
 
       this.cardContainer.appendChild(this.paginationElement);
+      
+      // Apply pagination styles
+      this._applyPaginationStyles();
     } else {
       this.paginationElement = null;
     }
 
-    root.appendChild(this.cardContainer);
+    // Only at the end, append to the DOM
+    root.appendChild(fragment);
 
     // Initial positioning requires element dimensions, wait for next frame
     requestAnimationFrame(() => {
@@ -955,7 +875,7 @@ class TodoSwipeCard extends HTMLElement {
       // Ensure currentIndex is valid before updating slider
       this.currentIndex = Math.max(0, Math.min(this.currentIndex, this.cards.length - 1));
       
-      // Apply border radius to all slides - ADDED THIS
+      // Apply border radius to all slides
       const cardBorderRadius = getComputedStyle(this.cardContainer).borderRadius;
       this.cards.forEach(cardData => {
         if (cardData.slide) {
@@ -966,33 +886,7 @@ class TodoSwipeCard extends HTMLElement {
       this.updateSlider(false); // Update without animation initially
 
       // Setup resize observer only after initial layout
-      if (!this.resizeObserver) {
-        this.resizeObserver = new ResizeObserver(() => {
-          // Debounce resize handling slightly
-          if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
-          this.resizeTimeout = setTimeout(() => {
-            if (!this.cardContainer) return;
-            
-            const newWidth = this.cardContainer.offsetWidth;
-            // Only update if width actually changed significantly
-            if (newWidth > 0 && Math.abs(newWidth - this.slideWidth) > 1) {
-              debugLog("Resizing slider...");
-              this.slideWidth = newWidth;
-              
-              // Reapply border radius when resizing - ADDED THIS
-              const cardBorderRadius = getComputedStyle(this.cardContainer).borderRadius;
-              this.cards.forEach(cardData => {
-                if (cardData.slide) {
-                  cardData.slide.style.borderRadius = cardBorderRadius;
-                }
-              });
-              
-              this.updateSlider(false); // Update without animation on resize
-            }
-          }, 50); // 50ms debounce
-        });
-        this.resizeObserver.observe(this.cardContainer);
-      }
+      this._setupResizeObserver();
     });
 
     // Add swipe detection only if more than one card
@@ -1000,82 +894,676 @@ class TodoSwipeCard extends HTMLElement {
       this._addSwiperGesture();
     }
 
+    // Set up menu button observers instead of using intervals
+    this._setupMenuButtonObservers();
+
+    // Apply transition properties
+    setTimeout(() => {
+      this._applyTransitionProperties();
+    }, 100);
+
     // Mark as initialized AFTER build completes
     this.initialized = true;
     this.building = false;
     debugLog("Regular card build completed.");
-    
-    // Add a periodic check to ensure menu buttons remain hidden (for Android)
-    this._startMenuButtonRemovalInterval();
-  }
-  
-  /**
-   * Start interval to periodically check and remove menu buttons
-   * @private
-   */
-  _startMenuButtonRemovalInterval() {
-    // Clear any existing interval
-    if (this._menuCheckInterval) {
-      clearInterval(this._menuCheckInterval);
-    }
-    
-    // Create a new interval to check every 2 seconds
-    this._menuCheckInterval = setInterval(() => {
-      // Safety check that cards exist
-      if (!this.isConnected || !this.cards || !this.cards.length) {
-        clearInterval(this._menuCheckInterval);
-        return;
-      }
-      
-      this.cards.forEach(card => {
-        if (card && card.element && card.element.shadowRoot) {
-          // Find all ha-button-menu elements in the card
-          const findAndRemoveMenus = (root) => {
-            if (!root) return;
-            
-            try {
-              // Direct children
-              const menus = root.querySelectorAll('ha-button-menu');
-              if (menus.length) {
-                menus.forEach(menu => {
-                  if (menu && menu.parentNode) {
-                    // Add a style to ensure it's hidden
-                    menu.style.display = 'none';
-                    menu.style.visibility = 'hidden';
-                    menu.style.opacity = '0';
-                    menu.style.pointerEvents = 'none';
-                    menu.style.position = 'absolute';
-                    
-                    // Add a direct inline style to the parent header if it exists
-                    if (menu.parentNode.classList?.contains('header')) {
-                      menu.parentNode.style.display = 'none';
-                      menu.parentNode.style.visibility = 'hidden';
-                    }
-                  }
-                });
-              }
-              
-              // Look for shadow roots in children
-              root.querySelectorAll('*').forEach(el => {
-                if (el.shadowRoot) {
-                  findAndRemoveMenus(el.shadowRoot);
-                }
-              });
-            } catch (e) { /* Ignore errors during check */ }
-          };
-          
-          try {
-            findAndRemoveMenus(card.element.shadowRoot);
-          } catch (e) {
-            // Ignore errors in the periodic check
-          }
-        }
-      });
-    }, 2000); // Check every 2 seconds
   }
 
   /**
-   * Add swipe gesture handling
+   * Create todo cards from entities
+   * Extracted from _build for better organization
+   * @param {Object} helpers - Card helpers from Home Assistant
+   * @private
+   */
+  async _createTodoCards(helpers) {
+    // Process entities in chunks for better performance with many cards
+    const entityBatches = [];
+    const batchSize = 3; // Process 3 entities at a time
+    
+    for (let i = 0; i < this._config.entities.length; i += batchSize) {
+      entityBatches.push(this._config.entities.slice(i, i + batchSize));
+    }
+    
+    // Process batches sequentially
+    for (const batch of entityBatches) {
+      await Promise.all(batch.map(async (entityId, batchIndex) => {
+        const i = this._config.entities.indexOf(entityId);
+        if (!entityId || entityId.trim() === "") {
+          debugLog("Skipping empty entity at index", i);
+          return null;
+        }
+
+        debugLog("Creating card for entity:", entityId);
+        const slideDiv = document.createElement('div');
+        slideDiv.className = 'slide';
+
+        try {
+          // Generate entity-specific class name for styling
+          const entityName = entityId.split('.').pop().replace(/_/g, '-');
+          
+          // Get background image if configured - improved handling
+          // Make sure we directly access the exact entityId in the background_images object
+          const backgroundImages = this._config.background_images || {};
+          const hasConfiguredImage = entityId in backgroundImages;
+          const backgroundImage = hasConfiguredImage ? backgroundImages[entityId] : null;
+          
+          debugLog(`Background image for ${entityId}: ${backgroundImage || 'none'}`);
+          
+          // Determine if Add button should be shown or hidden
+          const showAddButton = this._config.show_addbutton !== undefined ? 
+                                this._config.show_addbutton : false;
+
+          // Determine if completed menu should be shown or hidden
+          const showCompletedMenu = this._config.show_completed_menu !== undefined ?
+                                    this._config.show_completed_menu : false;
+          
+          // Create base internal styling
+          const internalCardModStyle = {
+            'ha-textfield': {
+              $: `
+                /* Input styling */
+                .mdc-text-field__input {
+                  color: var(--todo-swipe-card-text-color, white) !important;
+                }
+                
+                /* Basic field styling */
+                .mdc-text-field {
+                  --mdc-text-field-fill-color: transparent;
+                  height: auto !important;
+                  --text-field-padding: 0px 0px 5px 5px;
+                }
+                
+                /* Remove underline */
+                .mdc-line-ripple::before,
+                .mdc-line-ripple::after {
+                  border-bottom-style: none !important;
+                }
+
+                /* Floating label - critical part for "Add item" text */
+                .mdc-floating-label,
+                .mdc-text-field:not(.mdc-text-field--disabled) .mdc-floating-label,
+                .mdc-text-field .mdc-floating-label,
+                .mdc-floating-label--float-above {
+                  color: var(--todo-swipe-card-text-color, var(--primary-text-color)) !important;
+                  opacity: 1 !important;
+                }
+                
+                /* Mobile keyboard optimization */
+                const input = this.shadowRoot.querySelector('input');
+                if (input) {
+                  input.enterKeyHint = 'done';
+                }
+              `
+            },
+            '.': `
+              ha-card {
+                --mdc-typography-subtitle1-font-size: var(--todo-swipe-card-typography-size, 11px);
+                box-shadow: none;
+                height: 100% !important;
+                width: 100%;
+                max-height: none;
+                overflow-y: auto;
+                border-radius: inherit;
+                color: var(--todo-swipe-card-text-color, var(--primary-text-color));
+
+      /* Apply background image with higher specificity if provided */
+                ${backgroundImage ? 
+                  `background-image: url('${backgroundImage}') !important; 
+                   background-position: center center !important; 
+                   background-repeat: no-repeat !important;
+                   background-size: cover !important;
+                   background-color: transparent !important;` : 
+                  `background: var(--todo-swipe-card-background, var(--ha-card-background, var(--card-background-color, white))) !important;`
+                }
+              }
+
+
+
+              ha-card * {
+                color: var(--todo-swipe-card-text-color, var(--primary-text-color));
+              }
+
+              :host {
+                /* Checkbox styling */
+                --mdc-checkbox-ripple-size: var(--todo-swipe-card-checkbox-size, 20px);
+                --mdc-checkbox-state-layer-size: var(--todo-swipe-card-checkbox-size, 20px);
+                
+                /* Text field styling */
+                --mdc-text-field-idle-line-color: var(--todo-swipe-card-field-line-color, grey);
+                --mdc-text-field-hover-line-color: var(--todo-swipe-card-field-line-color, grey);
+                --mdc-text-field-outlined-idle-border-color: var(--todo-swipe-card-field-line-color, grey);
+                --mdc-text-field-outlined-hover-border-color: var(--todo-swipe-card-field-line-color, grey);
+                
+                /* Primary color */
+                --mdc-theme-primary: var(--todo-swipe-card-primary-color, grey);
+                
+                /* Border radius handling */
+                --card-border-radius: var(--ha-card-border-radius, 12px);
+                border-radius: var(--card-border-radius);
+              }
+
+              /* Checkbox transparency styling - to match original appearance */
+              ha-checkbox {
+                opacity: var(--todo-swipe-card-checkbox-opacity, 0.85);
+                --mdc-checkbox-unchecked-color: var(--todo-swipe-card-checkbox-color, var(--todo-swipe-card-text-color, var(--primary-text-color))) !important;
+                --mdc-checkbox-checked-color: var(--todo-swipe-card-checkbox-color, var(--todo-swipe-card-text-color, var(--primary-text-color))) !important;
+              }
+
+              /* Force text color on input fields too */
+              .mdc-text-field__input {
+                color: var(--todo-swipe-card-text-color, var(--primary-text-color)) !important;
+              }
+
+              ::-webkit-scrollbar {
+                display: none;
+              }
+
+              /* Hide "No tasks to do" text */
+              p.empty {
+                display: none;
+              }
+
+              /* Control the Add button visibility and position */
+              ${!showAddButton ? `
+              ha-icon-button.addButton {
+                position: absolute !important;
+                width: 1px !important;
+                height: 1px !important;
+                overflow: hidden !important;
+                opacity: 0 !important;
+                left: -9999px !important;
+                top: -9999px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+              }` : `
+              ha-icon-button.addButton {
+                position: absolute !important;
+                right: 1px !important;
+                top: 0px !important;
+                z-index: 10 !important;
+              }`}
+
+              /* Custom header styling */
+              ha-card.type-todo-list div.header h2 {
+                display: none; /* Hide all header text (Actief and Voltooid) */
+              }
+
+              /* Enhanced hiding for all three-dots menu buttons - both headers */
+              ha-card.type-todo-list div.header ha-button-menu,
+              ha-card.type-todo-list ha-button-menu,
+              ha-button-menu {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                position: absolute !important;
+                pointer-events: none !important;
+                width: 0 !important;
+                height: 0 !important;
+                overflow: hidden !important;
+                clip: rect(0 0 0 0) !important;
+                -webkit-transform: scale(0) !important;
+                transform: scale(0) !important;
+              }
+
+              /* Hide the separator completely */
+              ha-card.type-todo-list div.divider {
+                display: none;
+              }
+
+              /* Hide completed menu header completely */
+              ha-card.type-todo-list div.header:nth-of-type(2) {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+                position: absolute !important;
+                pointer-events: none !important;
+                width: 0 !important;
+                height: 0 !important;
+                overflow: hidden !important;
+                clip: rect(0 0 0 0) !important;
+              }
+
+              /* Remove extra spacing where the header used to be */
+              ha-card.type-todo-list div.header:nth-of-type(2) + div {
+                margin-top: 0;
+                padding-top: 0;
+              }
+              
+              /* Hide completed items if not configured to show */
+              ${!this._config.show_completed ? 'ha-check-list-item.editRow.completed { display: none; }' : ''}
+              
+              /* Hide reorder buttons */
+              ha-icon-button.reorderButton {
+                display: none !important;
+              }
+
+              /* Reduce height of list items */
+              ha-check-list-item {
+                min-height: var(--todo-swipe-card-item-height, 0px) !important;
+              }
+
+              /* Space between checkbox and list item */  
+              ha-check-list-item {
+                --mdc-list-item-graphic-margin: var(--todo-swipe-card-item-margin, 5px) !important;
+              }
+            `
+          };
+
+          // Get custom card mod styling from config (prioritize card_mod if present)
+          const customCardModStyle = this._config.card_mod || this._config.custom_card_mod || {};
+
+          // Merge internal and custom styling using the optimized method
+          const mergedCardModStyle = this._mergeCardModStyles(internalCardModStyle, customCardModStyle);
+          
+          // Create the todo-list card with merged card-mod styling
+          const cardConfig = {
+            type: 'todo-list',
+            entity: entityId,
+            hide_create: !this._config.show_create,
+            hide_completed: !this._config.show_completed,
+            card_mod: {
+              style: mergedCardModStyle
+            }
+          };
+          
+          const cardElement = await helpers.createCardElement(cardConfig);
+          
+          // Pass hass immediately if available
+          if (this._hass) {
+            cardElement.hass = this._hass;
+          }
+          
+          // Setup the input field properly using a dedicated function
+          const enhanceInputField = () => {
+            if (!cardElement || !cardElement.shadowRoot) return;
+            
+            const textField = cardElement.shadowRoot.querySelector('ha-textfield');
+            if (!textField || !textField.shadowRoot) return;
+            
+            const inputElement = textField.shadowRoot.querySelector('input');
+            if (!inputElement) return;
+            
+            // Set enterKeyHint without using CSS template string
+            inputElement.enterKeyHint = 'done';
+            
+            // Add a style tag to force placeholder color
+            const styleTag = document.createElement('style');
+            styleTag.textContent = `
+              /* Target placeholder text directly */
+              input.mdc-text-field__input::placeholder {
+                color: var(--todo-swipe-card-text-color, var(--primary-text-color)) !important;
+                opacity: 1 !important;
+              }
+              
+              /* Cross-browser compatibility */
+              ::-webkit-input-placeholder {
+                color: var(--todo-swipe-card-text-color, var(--primary-text-color)) !important;
+                opacity: 1 !important;
+              }
+              ::-moz-placeholder {
+                color: var(--todo-swipe-card-text-color, var(--primary-text-color)) !important;
+                opacity: 1 !important;
+              }
+              :-ms-input-placeholder {
+                color: var(--todo-swipe-card-text-color, var(--primary-text-color)) !important;
+                opacity: 1 !important;
+              }
+            `;
+            textField.shadowRoot.appendChild(styleTag);
+            
+            // Directly style the input's placeholder
+            if (inputElement.placeholder) {
+              // Also set inline style on the input element itself
+              inputElement.style.setProperty('--placeholder-color', 'var(--todo-swipe-card-text-color, var(--primary-text-color))');
+            }
+            
+            // Add a focused class to improve touch response
+            textField.addEventListener('click', () => {
+              if (inputElement) {
+                inputElement.focus();
+              }
+            });
+            
+            debugLog("Enhanced input field setup successfully");
+          };
+          
+          // Call enhancement function now
+          enhanceInputField();
+          
+          // Also set up a delayed call to handle cases where the DOM isn't fully ready
+          setTimeout(enhanceInputField, 500);
+          
+          // Store reference to the card
+          this.cards[i] = {
+            element: cardElement,
+            slide: slideDiv,
+            entityId: entityId
+          };
+          
+          // Add card to slide
+          slideDiv.appendChild(cardElement);
+          
+          // Add custom delete button if configured to show completed items and menu
+          if (this._config.show_completed && showCompletedMenu) {
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'delete-completed-button';
+            deleteButton.title = 'Delete completed items';
+            deleteButton.innerHTML = `
+              <svg viewBox="0 0 24 24">
+                <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
+              </svg>
+            `;
+            
+            // Apply delete button color if available
+            if (this._deleteButtonColor) {
+              deleteButton.style.color = this._deleteButtonColor;
+              const svg = deleteButton.querySelector('svg');
+              if (svg) {
+                svg.style.fill = this._deleteButtonColor;
+              }
+            }
+            
+            // Add click handler for the delete button with confirmation dialog
+            deleteButton.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              // Check if confirmation is required
+              if (this._config.delete_confirmation) {
+                // Create confirmation dialog
+                const dialog = document.createElement('ha-dialog');
+                dialog.heading = 'Confirm Deletion';
+                dialog.open = true;
+                
+                // Create content container
+                const content = document.createElement('div');
+                content.innerText = 'Are you sure you want to delete all completed items from the list?';
+                dialog.appendChild(content);
+                
+                // Create confirm button
+                const confirmButton = document.createElement('mwc-button');
+                confirmButton.slot = 'primaryAction';
+                confirmButton.label = 'Confirm';
+                confirmButton.style.color = 'var(--primary-color)';
+                confirmButton.setAttribute('aria-label', 'Confirm');
+                
+                // Add confirm button click handler
+                confirmButton.addEventListener('click', () => {
+                  dialog.parentNode.removeChild(dialog);
+                  if (this._hass) {
+                    this._hass.callService('todo', 'remove_completed_items', {
+                      entity_id: entityId
+                    });
+                  }
+                });
+                
+                // Create cancel button
+                const cancelButton = document.createElement('mwc-button');
+                cancelButton.slot = 'secondaryAction';
+                cancelButton.label = 'Cancel';
+                cancelButton.setAttribute('aria-label', 'Cancel');
+                
+                // Add cancel button click handler
+                cancelButton.addEventListener('click', () => {
+                  dialog.parentNode.removeChild(dialog);
+                });
+                
+                // Append buttons to dialog
+                dialog.appendChild(confirmButton);
+                dialog.appendChild(cancelButton);
+                
+                // Add dialog to document
+                document.body.appendChild(dialog);
+              } else {
+                // No confirmation needed, delete immediately
+                if (this._hass) {
+                  this._hass.callService('todo', 'remove_completed_items', {
+                    entity_id: entityId
+                  });
+                }
+              }
+            });
+            
+            slideDiv.appendChild(deleteButton);
+          }
+          
+          this.sliderElement.appendChild(slideDiv);
+          
+          // Process menus in a more efficient manner
+          this._hideMenusInRoot(cardElement.shadowRoot);
+          
+        } catch (e) {
+          console.error(`Error creating card ${i}:`, entityId, e);
+          const errorDiv = document.createElement('div');
+          errorDiv.style.cssText = "color: red; background: white; padding: 16px; border: 1px solid red; height: 100%; box-sizing: border-box;";
+          errorDiv.textContent = `Error creating card: ${e.message || e}. Check console for details.`;
+          slideDiv.appendChild(errorDiv);
+          this.sliderElement.appendChild(slideDiv);
+          this.cards[i] = { error: true, slide: slideDiv };
+        }
+      }));
+    }
+    
+    // Filter out any potential gaps if errors occurred
+    this.cards = this.cards.filter(Boolean);
+  }
+
+  /**
+   * Setup resize observer with improved debounce
+   * @private 
+   */
+  _setupResizeObserver() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+    }
+
+    this.resizeObserver = new ResizeObserver(() => {
+      // Increase debounce time for better performance
+      if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
+      this.resizeTimeout = setTimeout(() => {
+        if (!this.cardContainer) return;
+        
+        const newWidth = this.cardContainer.offsetWidth;
+        // Only update if width actually changed significantly
+        if (newWidth > 0 && Math.abs(newWidth - this.slideWidth) > 1) {
+          debugLog("Resizing slider...");
+          this.slideWidth = newWidth;
+          
+          // Reapply border radius when resizing
+          const cardBorderRadius = getComputedStyle(this.cardContainer).borderRadius;
+          this.cards.forEach(cardData => {
+            if (cardData.slide) {
+              cardData.slide.style.borderRadius = cardBorderRadius;
+            }
+          });
+          
+          this.updateSlider(false); // Update without animation on resize
+        }
+      }, 150); // Increased from 50ms to 150ms for better performance
+    });
+
+    if (this.cardContainer) {
+      this.resizeObserver.observe(this.cardContainer);
+    }
+  }
+  
+  /**
+   * Apply pagination-specific styles from card_mod
+   * @private
+   */
+  _applyPaginationStyles() {
+    if (!this.paginationElement) return;
+    
+    // Extract pagination styling from card_mod
+    let paginationStyles = '';
+    
+    // Handle string-based card_mod style
+    if (this._config.card_mod && this._config.card_mod.style && typeof this._config.card_mod.style === 'string') {
+      // Look for our pagination variables in the style string
+      const styleString = this._config.card_mod.style;
+      const variablesToExtract = [
+        '--todo-swipe-card-pagination-dot-inactive-color',
+        '--todo-swipe-card-pagination-dot-active-color',
+        '--todo-swipe-card-pagination-dot-size',
+        '--todo-swipe-card-pagination-dot-border-radius',
+        '--todo-swipe-card-pagination-dot-spacing',
+        '--todo-swipe-card-pagination-bottom',
+        '--todo-swipe-card-pagination-right',
+        '--todo-swipe-card-pagination-background',
+        '--todo-swipe-card-pagination-dot-active-size-multiplier'
+      ];
+      
+      // For each variable, try to extract its value from the style string
+      variablesToExtract.forEach(varName => {
+        const regex = new RegExp(`${varName}\\s*:\\s*([^;]+)`, 'i');
+        const match = styleString.match(regex);
+        if (match && match[1]) {
+          paginationStyles += `${varName}: ${match[1].trim()};\n`;
+        }
+      });
+    }
+    
+    // If we found pagination styles, apply them directly to the pagination element
+    if (paginationStyles) {
+      this.paginationElement.style.cssText += paginationStyles;
+      
+      // Get all dots for individual styling
+      const dots = this.paginationElement.querySelectorAll('.pagination-dot');
+      
+      // Apply special handling for individual dot properties
+      
+      // 1. Border radius (as you already had)
+      if (paginationStyles.includes('--todo-swipe-card-pagination-dot-border-radius')) {
+        dots.forEach(dot => {
+          dot.style.borderRadius = `var(--todo-swipe-card-pagination-dot-border-radius, 50%)`;
+        });
+      }
+      
+      // 2. Dot spacing
+      if (paginationStyles.includes('--todo-swipe-card-pagination-dot-spacing')) {
+        dots.forEach(dot => {
+          dot.style.margin = `0 var(--todo-swipe-card-pagination-dot-spacing, 4px)`;
+        });
+      }
+      
+      // 3. Active dot size multiplier
+      if (paginationStyles.includes('--todo-swipe-card-pagination-dot-active-size-multiplier')) {
+        // Find the active dot
+        const activeDot = this.paginationElement.querySelector('.pagination-dot.active');
+        if (activeDot) {
+          activeDot.style.width = `calc(var(--todo-swipe-card-pagination-dot-size, 8px) * var(--todo-swipe-card-pagination-dot-active-size-multiplier, 1))`;
+          activeDot.style.height = `calc(var(--todo-swipe-card-pagination-dot-size, 8px) * var(--todo-swipe-card-pagination-dot-active-size-multiplier, 1))`;
+        }
+      }
+    }
+  }
+
+  /**
+   * Set up optimized menu button observers
+   * Uses a single observer instead of multiple ones
+   * @private
+   */
+  _setupMenuButtonObservers() {
+    debugLog("Setting up menu button observers");
+    
+    // Clear any existing observers
+    if (this._menuObservers) {
+      this._menuObservers.forEach(observer => observer.disconnect());
+      this._menuObservers = [];
+    } else {
+      this._menuObservers = [];
+    }
+    
+    // Use a single observer for performance optimization instead of one per card
+    const observer = new MutationObserver(mutations => {
+      let shouldCheck = false;
+      
+      // Check if we need to re-process
+      for (const mutation of mutations) {
+        if (mutation.addedNodes.length > 0) {
+          shouldCheck = true;
+          break;
+        }
+      }
+      
+      if (shouldCheck) {
+        // Use requestAnimationFrame to batch DOM updates
+        requestAnimationFrame(() => {
+          this.cards.forEach(card => {
+            if (card && card.element && card.element.shadowRoot) {
+              this._hideMenusInRoot(card.element.shadowRoot);
+            }
+          });
+        });
+      }
+    });
+    
+    // Observe all cards with a single observer
+    this.cards.forEach(card => {
+      if (card && card.element && card.element.shadowRoot) {
+        // Hide existing menus first
+        this._hideMenusInRoot(card.element.shadowRoot);
+        
+        // Start observing this card's shadow root
+        observer.observe(card.element.shadowRoot, {
+          childList: true,
+          subtree: true
+        });
+      }
+    });
+    
+    // Store observer for cleanup
+    this._menuObservers.push(observer);
+  }
+
+  /**
+   * Hide menu buttons in a DOM tree
+   * Extracted to its own method for reuse
+   * @param {ShadowRoot|Element} root - Root element to process
+   * @private
+   */
+  _hideMenusInRoot(root) {
+    if (!root) return;
+    
+    try {
+      // Find all menu buttons in this root
+      const menus = root.querySelectorAll('ha-button-menu');
+      menus.forEach(menu => {
+        if (menu && menu.parentNode) {
+          menu.style.display = 'none';
+          menu.style.visibility = 'hidden';
+          menu.style.opacity = '0';
+          menu.style.pointerEvents = 'none';
+          menu.style.position = 'absolute';
+          
+          // Also hide parent header if it exists
+          if (menu.parentNode.classList && menu.parentNode.classList.contains('header')) {
+            menu.parentNode.style.display = 'none';
+            menu.parentNode.style.visibility = 'hidden';
+          }
+        }
+      });
+      
+      // Also check children with shadow roots (limit recursion depth for performance)
+      if (root.querySelectorAll) {
+        const shadowElements = root.querySelectorAll('*');
+        let count = 0;
+        
+        for (const el of shadowElements) {
+          if (count > 50) break; // Limit processing to avoid performance issues
+          if (el.shadowRoot) {
+            this._hideMenusInRoot(el.shadowRoot);
+            count++;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error hiding menus:", e);
+    }
+  }
+
+  /**
+   * Add swipe gesture handling with optimizations
    * @private
    */
   _addSwiperGesture() {
@@ -1188,7 +1676,7 @@ class TodoSwipeCard extends HTMLElement {
       }
     };
 
-    this._handleSwipeEnd = (e) => {
+    this.  _handleSwipeEnd = (e) => {
       // Remove window listeners for mouse events
       if (e.type === 'mouseup' || e.type === 'mouseleave') {
         window.removeEventListener('mousemove', this._mouseMoveHandler);
@@ -1200,9 +1688,13 @@ class TodoSwipeCard extends HTMLElement {
       const wasDragging = isDragging; // Store state before resetting
       isDragging = false;
 
+      // Use stored transition values if available, otherwise default
+      const transitionSpeed = this._transitionSpeed || '0.3s';
+      const transitionEasing = this._transitionEasing || 'ease-out';
+
       // Re-enable transition and reset cursor
       if (this.sliderElement) {
-        this.sliderElement.style.transition = 'transform 0.3s ease-out';
+        this.sliderElement.style.transition = `transform ${transitionSpeed} ${transitionEasing}`;
         this.sliderElement.style.cursor = '';
       }
 
@@ -1249,7 +1741,7 @@ class TodoSwipeCard extends HTMLElement {
         'ha-icon-button', 'mwc-button', 'paper-button'
       ];
       const tagName = element.localName?.toLowerCase();
-      const role = element.getAttribute('role');
+      const role = element.getAttribute && element.getAttribute('role');
 
       // Check direct tag name or common roles
       if (interactiveTags.includes(tagName) || (role && ['button', 'checkbox', 'switch', 'slider', 'link', 'menuitem', 'textbox'].includes(role))) {
@@ -1257,7 +1749,7 @@ class TodoSwipeCard extends HTMLElement {
       }
 
       // Check common component host elements
-      if (element.closest('ha-control-button, ha-control-select, ha-control-slider, ha-control-button-group, ha-alert, mwc-list-item, paper-item, ha-list-item')) {
+      if (element.closest && element.closest('ha-control-button, ha-control-select, ha-control-slider, ha-control-button-group, ha-alert, mwc-list-item, paper-item, ha-list-item')) {
         return true;
       }
 
@@ -1296,7 +1788,7 @@ class TodoSwipeCard extends HTMLElement {
     this._mouseMoveHandler = this._handleSwipeMove.bind(this);
     this._mouseUpHandler = this._handleSwipeEnd.bind(this);
 
-    // Add listeners
+    // Add listeners with proper passive settings for better performance
     this.cardContainer.addEventListener('touchstart', this._touchStartHandler, { passive: true });
     this.cardContainer.addEventListener('touchmove', this._touchMoveHandler, { passive: false });
     this.cardContainer.addEventListener('touchend', this._touchEndHandler, { passive: true });
@@ -1331,8 +1823,14 @@ class TodoSwipeCard extends HTMLElement {
       return;
     }
 
+    // Use stored transition values if available, otherwise default
+    const transitionSpeed = this._transitionSpeed || '0.3s';
+    const transitionEasing = this._transitionEasing || 'ease-out';
+
     // Set transition based on animate parameter
-    this.sliderElement.style.transition = animate ? 'transform 0.3s ease-out' : 'none';
+    this.sliderElement.style.transition = animate 
+      ? `transform ${transitionSpeed} ${transitionEasing}` 
+      : 'none';
 
     // Get card spacing from config
     const cardSpacing = this._config.card_spacing || 0;
@@ -1345,7 +1843,7 @@ class TodoSwipeCard extends HTMLElement {
     const translateX = this.currentIndex * (this.slideWidth + cardSpacing);
     this.sliderElement.style.transform = `translateX(-${translateX}px)`;
 
-    // Get the border radius from the container and apply to all slides - ADDED THIS
+    // Get the border radius from the container and apply to all slides
     const cardBorderRadius = getComputedStyle(this.cardContainer).borderRadius;
     this.cards.forEach((card) => {
       if (card.slide) {
@@ -1360,6 +1858,9 @@ class TodoSwipeCard extends HTMLElement {
       dots.forEach((dot, i) => {
         dot.classList.toggle('active', i === this.currentIndex);
       });
+      
+      // Apply pagination styles
+      this._applyPaginationStyles();
     }
   }
 
@@ -1390,20 +1891,35 @@ class TodoSwipeCardEditor extends LitElement {
     // Force render update when the editor is connected to the DOM
     // This helps ensure entities appear after cache clears
     debugLog("TodoSwipeCardEditor - Connected to DOM");
-    setTimeout(() => {
-      this.requestUpdate();
-    }, 100);
+    
+    // Use a delayed update to avoid multiple reflows
+    if (!this._initialUpdateDone) {
+      this._initialUpdateDone = true;
+      setTimeout(() => {
+        this.requestUpdate();
+      }, 100);
+    }
   }
 
   updated(changedProperties) {
     super.updated(changedProperties);
     
-    // Check if entities exist but are not rendering
-    if (this._config && this._config.entities && this._config.entities.length > 0) {
-      const entityPickers = this.shadowRoot.querySelectorAll('ha-entity-picker');
-      if (entityPickers.length === 0 || entityPickers.length < this._config.entities.length) {
-        debugLog("TodoSwipeCardEditor - Entity pickers missing, forcing update");
-        this.requestUpdate();
+    // Only update entities if configuration has changed, with debounce
+    if (changedProperties.has('_config') && this._config) {
+      // Only check for entity pickers if really needed
+      if (this._config.entities && this._config.entities.length > 0) {
+        // Batch DOM checks with requestAnimationFrame for better performance
+        if (this._updateRAF) {
+          cancelAnimationFrame(this._updateRAF);
+        }
+        
+        this._updateRAF = requestAnimationFrame(() => {
+          const entityPickers = this.shadowRoot.querySelectorAll('ha-entity-picker');
+          if (entityPickers.length === 0 || entityPickers.length < this._config.entities.length) {
+            this.requestUpdate();
+          }
+          this._updateRAF = null;
+        });
       }
     }
   }
@@ -1707,10 +2223,22 @@ class TodoSwipeCardEditor extends LitElement {
       const newConfig = { ...this._config, [configValue]: value };
       this._config = newConfig; // Update internal state first
       
-      // Dispatch the event with the updated config
-      debugLog(`Config value changed: ${configValue} = ${value}`, newConfig);
-      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+      // Use debounce to avoid excessive reflows for rapid changes
+      this._debounceDispatch(newConfig);
     }
+  }
+
+  // Debounce config change dispatches for better performance
+  _debounceDispatch(newConfig) {
+    if (this._debounceTimeout) {
+      clearTimeout(this._debounceTimeout);
+    }
+    
+    this._debounceTimeout = setTimeout(() => {
+      debugLog(`Dispatching config-changed event`, newConfig);
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+      this._debounceTimeout = null;
+    }, 100); // 100ms debounce
   }
 
   _cardSpacingChanged(ev) {
@@ -1722,7 +2250,7 @@ class TodoSwipeCardEditor extends LitElement {
       this._config = newConfig; // Update internal state first
       
       debugLog(`Card spacing changed to: ${value}`, newConfig);
-      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+      this._debounceDispatch(newConfig);
     }
   }
 
@@ -1861,9 +2389,8 @@ class TodoSwipeCardEditor extends LitElement {
     // Update internal state first
     this._config = newConfig;
     
-    // Dispatch the event
-    debugLog(`Background image for ${entityId} changed to "${imageUrl}"`, newConfig);
-    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+    // Use debounced dispatch for background image changes
+    this._debounceDispatch(newConfig);
   }
 
   render() {
