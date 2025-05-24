@@ -984,7 +984,7 @@ class TodoSwipeCard extends HTMLElement {
         padding: 4px;
         background-color: transparent;
         border: none;
-        color: var(--todo-swipe-card-delete-button-color, var(--primary-text-color));
+        color: var(--todo-swipe-card-delete-button-color, var(--todo-swipe-card-text-color, var(--primary-text-color)));
         cursor: pointer;
         border-radius: 50%;
         width: 36px;
@@ -1392,6 +1392,10 @@ class TodoSwipeCard extends HTMLElement {
         }
 
         :host {
+          /* Establish color hierarchy for proper inheritance */
+          --todo-swipe-card-text-color: var(--todo-swipe-card-text-color, var(--primary-text-color));
+          --todo-swipe-card-delete-button-color: var(--todo-swipe-card-delete-button-color, var(--todo-swipe-card-text-color, var(--primary-text-color)));
+
           /* Checkbox styling with CSS variable control */
           --mdc-checkbox-ripple-size: var(--todo-swipe-card-checkbox-size, 20px);
           --mdc-checkbox-state-layer-size: var(--todo-swipe-card-checkbox-size, 20px);
