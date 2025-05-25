@@ -211,7 +211,6 @@ card_mod:
       --todo-swipe-card-pagination-dot-size: 8px;
       --todo-swipe-card-pagination-dot-border-radius: 1px;
       --todo-swipe-card-pagination-dot-active-color: #4caf50;
-      --todo-swipe-card-pagination-dot-inactive-color: rgba(158, 158, 158, 0.4);
       --todo-swipe-card-pagination-dot-spacing: 6px;
       --todo-swipe-card-pagination-bottom: 10px;
       
@@ -248,7 +247,6 @@ card_mod:
       --todo-swipe-card-pagination-dot-active-size-multiplier: 2.3;
       --todo-swipe-card-pagination-dot-spacing: 13px;
       --todo-swipe-card-pagination-dot-active-color: green;
-      --todo-swipe-card-pagination-dot-inactive-color: rgba(158, 158, 158, 0.4);
       
       --todo-swipe-card-add-button-color: purple;
       --todo-swipe-card-delete-button-color: purple;
