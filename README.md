@@ -1,5 +1,10 @@
 # Todo Swipe Card
 
+[![Github All Releases](https://img.shields.io/github/downloads/nutteloost/todo-swipe-card/total.svg)]()
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![Reddit Profile](https://img.shields.io/badge/Reddit-My%20stuff-orange?logo=reddit)](https://www.reddit.com/user/nutteloost/submitted/)
+[![Home Assistant Community Forum](https://img.shields.io/badge/Home%20Assistant-Community%20Forum-blue?logo=home-assistant)](https://community.home-assistant.io/t/simple-swipe-card-a-custom-card-for-easy-card-navigation/888415)
+
 A specialized swipe card for todo lists in Home Assistant with custom styling.
 
 > ⚠ **Important**: This card requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed and working properly. Make sure to install card-mod from HACS before using Todo Swipe Card.
