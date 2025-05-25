@@ -232,7 +232,7 @@ card_mod:
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; max-width: 320px;" alt="Example 1">
 </td>
 </tr>
-</table
+</table>
 
 #### Example 2: Vibrant Accessibility Theme
 
@@ -268,9 +268,9 @@ card_mod:
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" style="width: 100%; max-width: 320px;" alt="Example 2">
 </td>
 </tr>
-</table
+</table>
 
-## My Other Custom Cards
+### My Other Custom Cards
 
 Check out my other custom cards for Home Assistant:
 
