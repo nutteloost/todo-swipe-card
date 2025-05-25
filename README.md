@@ -146,7 +146,7 @@ card_mod:
 
 ### Complete CSS Variables Reference
 
-```css
+```yaml
 /* Core Appearance */
 --todo-swipe-card-background:                           /* Main card background color or gradient */
 --todo-swipe-card-text-color:                           /* Primary text color for all content including items and placeholders */
