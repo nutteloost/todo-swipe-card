@@ -188,7 +188,9 @@ card_mod:
 
 <table>
 <tr>
-<td>
+<td style="width: 50%; vertical-align: top;">
+
+<div style="overflow-x: auto; max-width: 100%;">
 
 ```yaml
 card_mod:
@@ -219,15 +221,14 @@ card_mod:
       --todo-swipe-card-transition-easing: ease-out;
     }
 ```
-</td>
 
-<td>
+</div>
+</td>
+<td style="width: 50%; vertical-align: top;">
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; max-width: 400px;" alt="Example 1">
 </td>
 </tr>
-
 </table>
-
 
 #### Example 2: Vibrant Accessibility Theme
 
