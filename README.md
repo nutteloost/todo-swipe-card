@@ -188,9 +188,7 @@ card_mod:
 
 <table>
 <tr>
-<td style="width: 50%; vertical-align: top;">
-
-<div style="overflow-x: auto; max-width: 100%;">
+<td style="width: 60%; max-width: 500px; vertical-align: top;">
 
 ```yaml
 card_mod:
@@ -222,10 +220,9 @@ card_mod:
     }
 ```
 
-</div>
 </td>
-<td style="width: 50%; vertical-align: top;">
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; max-width: 400px;" alt="Example 1">
+<td style="width: 40%; vertical-align: top;">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; min-width: 300px;" alt="Example 1">
 </td>
 </tr>
 </table>
