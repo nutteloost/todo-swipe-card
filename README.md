@@ -164,6 +164,8 @@ card_mod:
 --todo-swipe-card-pagination-dot-active-size-multiplier: /* Size multiplier for active dots (default: 1) */
 --todo-swipe-card-pagination-bottom:                     /* Distance of pagination from bottom edge (default: 8px) */
 --todo-swipe-card-pagination-background:                 /* Background color of the pagination area */
+--todo-swipe-card-pagination-dot-active-opacity:         /* Opacity of active pagination dot (default: 1) */
+--todo-swipe-card-pagination-dot-inactive-opacity:       /* Opacity of inactive pagination dot (default: 0.6) */
 
 /* Animation and Transitions */
 --todo-swipe-card-transition-speed:                      /* Duration of swipe animations (default: 0.3s) */
@@ -177,6 +179,10 @@ card_mod:
 ### Styling Examples
 
 #### Example 1: Minimalist Light Theme with Square Indicators
+
+<table>
+<tr>
+<td width="50%">
 
 ```yaml
 card_mod:
@@ -207,7 +213,13 @@ card_mod:
       --todo-swipe-card-transition-easing: ease-out;
     }
 ```
+</td>
 
+<td width="50%">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" width="400" alt="Example 1">
+</td>
+</tr>
+</table>
 
 
 #### Example 2: High Contrast Accessibility Theme
@@ -233,6 +245,13 @@ card_mod:
       --todo-swipe-card-delete-button-color: purple;
     }
 ```
+</td>
+
+<td width="50%">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" width="400" alt="Example 2">
+</td>
+</tr>
+</table>
 
 
 ## My Other Custom Cards
