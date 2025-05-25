@@ -252,10 +252,10 @@ card_mod:
       --todo-swipe-card-delete-button-color: purple;
     }
 ```
-</td>
 
-<td style="width: 60%">
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" width="100%" alt="Example 2">
+</td>
+<td style="width: 40%; vertical-align: top;">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" style="width: 100%; min-width: 300px;" alt="Example 2">
 </td>
 </tr>
 </table>
