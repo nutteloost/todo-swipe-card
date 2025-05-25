@@ -230,7 +230,7 @@ card_mod:
 
 <table>
 <tr>
-<td style="width: 40%">
+<td style="width: 60%; max-width: 500px; vertical-align: top;">
 
 ```yaml
 card_mod:
