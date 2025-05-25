@@ -249,7 +249,6 @@ card_mod:
       --todo-swipe-card-checkbox-checked-color: green;
       --todo-swipe-card-checkbox-checkmark-color: purple;
 
-      --todo-swipe-card-pagination-dot-active-size-multiplier: 2.3;
       --todo-swipe-card-pagination-dot-spacing: 13px;
       --todo-swipe-card-pagination-dot-active-color: green;
       
