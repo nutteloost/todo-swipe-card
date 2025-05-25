@@ -98,9 +98,11 @@ background_images:
 ```
 
 ## Customizing and Theming
-> ⚠ **Important**: Since Todo Swipe Card applies internal card-mod styling for core functionality, custom styling may occasionally conflict. If your customizations do not appear as expected, ensure your CSS selectors have sufficient specificity or add `!important` declarations to override internal styles.
+> ⚠ **Important**: This card requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed and working properly. Please note that since Todo Swipe Card applies internal card-mod styling for core functionality, some custom styling may conflict or behave unexpectedly. Test your customizations thoroughly and use CSS specificity or `!important` declarations when necessary.
 
 Todo Swipe Card v1.6.0 provides extensive customization capabilities through two primary methods: Home Assistant themes and card-mod styling. The card supports over twenty CSS variables that control every aspect of its appearance, from basic colors and typography to sophisticated pagination styling and transition effects.
+
+**Simplified Customization Approach**: Todo Swipe Card includes CSS variables that make customization much easier compared to traditional card-mod styling. Instead of having to figure out complex CSS selectors or inspect the card's internal structure, you can simply use these predefined variables to customize colors, sizes, and other visual elements. This means you can create great-looking themes without needing to be a CSS expert or spending time hunting down the right selectors to target specific elements.
 
 When combining theme-based styling with card-mod overrides, remember that card-mod styles take precedence over theme variables. This hierarchy allows you to establish baseline styling through themes while maintaining the flexibility to customize individual card instances as needed.
 
