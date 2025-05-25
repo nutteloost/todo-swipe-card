@@ -222,7 +222,7 @@ card_mod:
 </td>
 
 <td>
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" width="400" alt="Example 1">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; max-width: 400px;" alt="Example 1">
 </td>
 </tr>
 
@@ -259,7 +259,7 @@ card_mod:
 </td>
 
 <td style="width: 60%">
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" width="400" alt="Example 2">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" width="100%" alt="Example 2">
 </td>
 </tr>
 </table>
