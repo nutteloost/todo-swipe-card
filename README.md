@@ -231,9 +231,11 @@ card_mod:
 
 #### Example 2: Vibrant Accessibility Theme
 
-<table>
+<table style="table-layout: fixed; width: 100%;">
 <tr>
-<td style="width: 60%; max-width: 500px; vertical-align: top;">
+<td style="width: 60%; vertical-align: top; overflow: hidden;">
+
+<div style="overflow-x: auto; white-space: nowrap;">
 
 ```yaml
 card_mod:
@@ -256,13 +258,13 @@ card_mod:
     }
 ```
 
+</div>
 </td>
 <td style="width: 40%; vertical-align: top;">
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" style="width: 100%; min-width: 300px;" alt="Example 2">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" style="width: 100%; max-width: 320px;" alt="Example 2">
 </td>
 </tr>
-</table>
-
+</table
 
 ## My Other Custom Cards
 
