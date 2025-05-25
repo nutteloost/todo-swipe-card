@@ -46,7 +46,6 @@ class TodoSwipeCard extends HTMLElement {
     this.paginationElement = null;
     this.initialized = false;
     this.building = false;
-    this._styleCache = new Map(); // Use Map for better performance
     this._menuObservers = [];
     this._dynamicStyleElement = null;
     this._configUpdateTimer = null; // Timer for debouncing config updates
@@ -161,60 +160,25 @@ class TodoSwipeCard extends HTMLElement {
    * @private
    */
   _mergeCardModStyles(internalStyle, customStyle) {
-    // Ensure style cache exists
-    if (!this._styleCache) {
-      this._styleCache = new Map();
-    }
-    
-    // Create cache key
-    const cacheKey = JSON.stringify({ internal: internalStyle, custom: customStyle });
-    
-    // Check cache first
-    if (this._styleCache.has(cacheKey)) {
-      return this._styleCache.get(cacheKey);
-    }
-    
     // If no custom style provided, return internal style
     if (!customStyle || Object.keys(customStyle).length === 0) {
-      this._styleCache.set(cacheKey, internalStyle);
       return internalStyle;
     }
     
-    // Start with a copy of the internal style
-    const mergedStyle = JSON.parse(JSON.stringify(internalStyle));
+    // Simple merge without caching for better performance
+    const mergedStyle = { ...internalStyle };
     
-    // Loop through all selectors in custom style
     for (const selector in customStyle) {
       if (selector in mergedStyle) {
-        // If the selector already exists in internal style
-        if (typeof customStyle[selector] === 'object' && 
-            typeof mergedStyle[selector] === 'object') {
-          // Handle nested objects (like the $ selector in ha-textfield)
-          if (selector === 'ha-textfield' && 
-              customStyle[selector].$ && 
-              mergedStyle[selector].$) {
-            // For special nested $ case, we need to merge CSS text
-            mergedStyle[selector].$ = mergedStyle[selector].$ + '\n' + customStyle[selector].$;
-          } else {
-            // For other objects, just override
-            mergedStyle[selector] = {...mergedStyle[selector], ...customStyle[selector]};
-          }
-        } else if (typeof customStyle[selector] === 'string' && 
-                  typeof mergedStyle[selector] === 'string') {
-          // For string CSS values, concatenate with user style at the end (to override)
+        if (typeof customStyle[selector] === 'string' && typeof mergedStyle[selector] === 'string') {
           mergedStyle[selector] = mergedStyle[selector] + '\n' + customStyle[selector];
         } else {
-          // For any other case, override with user style
-          mergedStyle[selector] = customStyle[selector];
+          mergedStyle[selector] = { ...mergedStyle[selector], ...customStyle[selector] };
         }
       } else {
-        // If selector doesn't exist in internal style, add it
         mergedStyle[selector] = customStyle[selector];
       }
     }
-    
-    // Cache the result
-    this._styleCache.set(cacheKey, mergedStyle);
     
     return mergedStyle;
   }
@@ -963,6 +927,7 @@ class TodoSwipeCard extends HTMLElement {
         border-radius: var(--todo-swipe-card-pagination-dot-border-radius, 50%);
         margin: 0 var(--todo-swipe-card-pagination-dot-spacing, 4px);
         background-color: var(--todo-swipe-card-pagination-dot-inactive-color, rgba(127, 127, 127, 0.6));
+        opacity: var(--todo-swipe-card-pagination-dot-inactive-opacity, 0.6);
         cursor: pointer;
         transition: background-color 0.2s ease, width 0.2s ease, height 0.2s ease;
         flex-shrink: 0;
@@ -972,6 +937,7 @@ class TodoSwipeCard extends HTMLElement {
         background-color: var(--todo-swipe-card-pagination-dot-active-color, var(--primary-color, #03a9f4));
         width: calc(var(--todo-swipe-card-pagination-dot-size, 8px) * var(--todo-swipe-card-pagination-dot-active-size-multiplier, 1));
         height: calc(var(--todo-swipe-card-pagination-dot-size, 8px) * var(--todo-swipe-card-pagination-dot-active-size-multiplier, 1));
+        opacity: var(--todo-swipe-card-pagination-dot-active-opacity, 1);
       }
       
       .delete-completed-button {
@@ -1284,9 +1250,8 @@ class TodoSwipeCard extends HTMLElement {
                           this._config.show_addbutton : false;
     
     // Use CSS variables for all colors with proper fallbacks
-    // No forced opacity - let CSS variables control everything
     let textColor = `var(--todo-swipe-card-text-color, var(--primary-text-color))`;
-    let checkboxColor = `var(--todo-swipe-card-checkbox-color, ${textColor})`;
+    let checkboxColor = `var(--todo-swipe-card-checkbox-color, rgba(255, 255, 255, 0.5))`;
     let checkboxCheckedColor = `var(--todo-swipe-card-checkbox-checked-color, var(--primary-color))`;
     let checkboxCheckmarkColor = `var(--todo-swipe-card-checkbox-checkmark-color, var(--primary-text-color))`;
     let addButtonColor = `var(--todo-swipe-card-add-button-color, ${textColor})`;
@@ -1327,15 +1292,6 @@ class TodoSwipeCard extends HTMLElement {
             border-bottom-style: none !important;
           }
 
-          /* Floating label styling with CSS variable control */
-          .mdc-floating-label,
-          .mdc-text-field:not(.mdc-text-field--disabled) .mdc-floating-label,
-          .mdc-text-field .mdc-floating-label,
-          .mdc-floating-label--float-above {
-            color: var(--todo-swipe-card-floating-label-color, ${textColor}) !important;
-            opacity: var(--todo-swipe-card-floating-label-opacity, 1) !important;
-          }
-          
           /* Placeholder text styling with CSS variable control */
           .mdc-text-field__input::placeholder {
             color: var(--todo-swipe-card-placeholder-color, ${textColor}) !important;
@@ -1406,9 +1362,6 @@ class TodoSwipeCard extends HTMLElement {
           --mdc-text-field-outlined-idle-border-color: var(--todo-swipe-card-field-line-color, grey);
           --mdc-text-field-outlined-hover-border-color: var(--todo-swipe-card-field-line-color, grey);
           
-          /* Primary color */
-          --mdc-theme-primary: var(--todo-swipe-card-primary-color, grey);
-          
           /* Border radius handling */
           --card-border-radius: var(--ha-card-border-radius, 12px);
           border-radius: var(--card-border-radius);
@@ -1421,15 +1374,19 @@ class TodoSwipeCard extends HTMLElement {
           --mdc-checkbox-ink-color: ${checkboxCheckmarkColor} !important;
         }
 
-        /* Checkbox styling with CSS variable opacity control */
         ha-checkbox {
-          opacity: var(--todo-swipe-card-checkbox-opacity, 1) !important;
           --mdc-checkbox-unchecked-color: ${checkboxColor} !important;
           --mdc-checkbox-checked-color: ${checkboxCheckedColor} !important;
           --mdc-checkbox-selected-checkmark-color: ${checkboxCheckmarkColor} !important;
           --mdc-checkbox-mark-color: ${checkboxCheckmarkColor} !important;
           --mdc-checkbox-ink-color: ${checkboxCheckmarkColor} !important;
           --mdc-checkbox-disabled-color: rgba(0, 0, 0, 0.38) !important;
+        }
+
+        /* Direct SVG path targeting for checkmark - keep at full opacity */
+        ha-checkbox svg path,
+        ha-checkbox .mdc-checkbox__checkmark-path {
+          stroke: ${checkboxCheckmarkColor} !important;
         }
 
         /* Direct SVG path targeting for checkmark */
@@ -1627,7 +1584,9 @@ class TodoSwipeCard extends HTMLElement {
         '--todo-swipe-card-pagination-bottom',
         '--todo-swipe-card-pagination-right',
         '--todo-swipe-card-pagination-background',
-        '--todo-swipe-card-pagination-dot-active-size-multiplier'
+        '--todo-swipe-card-pagination-dot-active-size-multiplier',
+        '--todo-swipe-card-pagination-dot-active-opacity',
+        '--todo-swipe-card-pagination-dot-inactive-opacity'
       ];
       
       // For each variable, try to extract its value from the style string
@@ -1681,52 +1640,30 @@ class TodoSwipeCard extends HTMLElement {
       this._menuObservers = [];
     }
     
-    // Create a single mutation observer with debouncing
-    let observerTimeout;
-    const observer = new MutationObserver(mutations => {
-      // Clear existing timeout
-      if (observerTimeout) clearTimeout(observerTimeout);
-      
-      // Debounce observer callbacks
-      observerTimeout = setTimeout(() => {
-        let shouldCheck = false;
-        
-        // Check if we need to re-process
-        for (const mutation of mutations) {
-          if (mutation.addedNodes.length > 0) {
-            shouldCheck = true;
-            break;
+    // Single observer with increased debounce time
+    const observer = new MutationObserver(() => {
+      // Use longer debounce for better performance
+      if (this._menuObserverTimeout) clearTimeout(this._menuObserverTimeout);
+      this._menuObserverTimeout = setTimeout(() => {
+        this.cards.forEach(card => {
+          if (card?.element?.shadowRoot) {
+            this._hideMenusInRoot(card.element.shadowRoot);
           }
-        }
-        
-        if (shouldCheck) {
-          // Use requestAnimationFrame to batch DOM updates
-          requestAnimationFrame(() => {
-            this.cards.forEach(card => {
-              if (card && card.element && card.element.shadowRoot) {
-                this._hideMenusInRoot(card.element.shadowRoot);
-              }
-            });
-          });
-        }
-      }, 100);
+        });
+      }, 250); // Increased from 100ms
     });
     
-    // Observe all cards with a single observer
+    // Observe only necessary elements
     this.cards.forEach(card => {
-      if (card && card.element && card.element.shadowRoot) {
-        // Hide existing menus first
+      if (card?.element?.shadowRoot) {
         this._hideMenusInRoot(card.element.shadowRoot);
-        
-        // Start observing this card's shadow root
         observer.observe(card.element.shadowRoot, {
           childList: true,
-          subtree: true
+          subtree: false // Reduced scope
         });
       }
     });
     
-    // Store observer for cleanup
     this._menuObservers.push(observer);
   }
 
@@ -2483,8 +2420,7 @@ class TodoSwipeCardEditor extends LitElement {
     this._debounceTimeout = setTimeout(() => {
       debugLog(`Dispatching config-changed event`, newConfig);
       this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
-      this._debounceTimeout = null;
-    }, 300); // Increased debounce time
+    }, 150); // Reduced from 300ms
   }
 
   _cardSpacingChanged(ev) {
@@ -2841,7 +2777,7 @@ if (!registered) {
 
 // Version logging
 console.info(
-  `%c TODO-SWIPE-CARD %c v1.7.3 %c - A swipeable card for to-do lists`,
+  `%c TODO-SWIPE-CARD %c v1.6.0 %c - A swipeable card for to-do lists`,
   "color: white; background: #4caf50; font-weight: 700;",
   "color: #4caf50; background: white; font-weight: 700;",
   "color: grey; background: white; font-weight: 400;"
