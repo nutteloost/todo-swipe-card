@@ -2,7 +2,7 @@
 
 A specialized swipe card for todo lists in Home Assistant with custom styling.
 
-> **Important**: This card requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed and working properly. Make sure to install card-mod from HACS before using Todo Swipe Card.
+> ⚠ **Important**: This card requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed and working properly. Make sure to install card-mod from HACS before using Todo Swipe Card.
 
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card-example.gif" width="400" alt="Example">
 
@@ -16,7 +16,10 @@ Todo Swipe Card is a customizable container card for Home Assistant specifically
 - Options to show/hide completed items
 - Delete completed items button with optional confirmation dialog
 - Visual editor support
-- Requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed
+
+## Requirements
+- Home Assistant 2023.4 or later
+- [Card-Mod](https://github.com/thomasloven/lovelace-card-mod) installed and configured
 
 ## Installation
  
@@ -95,7 +98,7 @@ background_images:
 ```
 
 ## Customizing and Theming
-> **Important**: This card requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed and working properly. Please note that since Todo Swipe Card applies internal card-mod styling for core functionality, some custom styling may conflict or behave unexpectedly. Test your customizations thoroughly and use CSS specificity or `!important` declarations when necessary.
+> ⚠ **Important**: Since Todo Swipe Card applies internal card-mod styling for core functionality, custom styling may occasionally conflict. If your customizations do not appear as expected, ensure your CSS selectors have sufficient specificity or add `!important` declarations to override internal styles.
 
 Todo Swipe Card v1.6.0 provides extensive customization capabilities through two primary methods: Home Assistant themes and card-mod styling. The card supports over twenty CSS variables that control every aspect of its appearance, from basic colors and typography to sophisticated pagination styling and transition effects.
 
@@ -115,6 +118,7 @@ frontend:
       # Todo Swipe Card specific variables
       todo-swipe-card-text-color: "#2c3e50"
       todo-swipe-card-pagination-dot-active-color: "#e74c3c"
+      # Add any other variables from the complete CSS reference
 ```
 
 ### Method 2: Card-Mod Styling
@@ -219,10 +223,15 @@ card_mod:
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" width="400" alt="Example 1">
 </td>
 </tr>
+
 </table>
 
 
-#### Example 2: High Contrast Accessibility Theme
+#### Example 2: Vibrant Accessibility Theme
+
+<table>
+<tr>
+<td width="50%">
 
 ```yaml
 card_mod:
