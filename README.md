@@ -188,7 +188,7 @@ card_mod:
 
 <table>
 <tr>
-<td width="50%">
+<td>
 
 ```yaml
 card_mod:
@@ -221,7 +221,7 @@ card_mod:
 ```
 </td>
 
-<td width="50%">
+<td>
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" width="400" alt="Example 1">
 </td>
 </tr>
@@ -233,7 +233,7 @@ card_mod:
 
 <table>
 <tr>
-<td width="50%">
+<td style="width: 60%">
 
 ```yaml
 card_mod:
@@ -258,7 +258,7 @@ card_mod:
 ```
 </td>
 
-<td width="50%">
+<td style="width: 40%">
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" width="400" alt="Example 2">
 </td>
 </tr>
