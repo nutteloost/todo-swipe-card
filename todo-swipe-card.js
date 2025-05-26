@@ -7,10 +7,11 @@
  * Requires card-mod to be installed: https://github.com/thomasloven/lovelace-card-mod
  * 
  * @author nutteloost
- * @version 1.6.0
+ * @version 1.6.1
  * @license MIT
  * @see {@link https://github.com/nutteloost/todo-swipe-card}
  */
+
 
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.5.1/lit-element.js?module";
 
@@ -68,7 +69,8 @@ class TodoSwipeCard extends HTMLElement {
       show_completed_menu: false,
       delete_confirmation: false,
       card_spacing: 15,
-      custom_card_mod: {}
+      custom_card_mod: {},
+      display_orders: {}
     };
   }
   
@@ -337,6 +339,25 @@ class TodoSwipeCard extends HTMLElement {
       newConfig.background_images = {};
     }
 
+    // Ensure display_orders is an object
+    if (!newConfig.display_orders || typeof newConfig.display_orders !== 'object') {
+      newConfig.display_orders = {};
+    }
+
+    // Set default display order for entities that don't have one
+    entities.forEach(entityId => {
+      if (entityId && !newConfig.display_orders[entityId]) {
+        newConfig.display_orders[entityId] = 'none'; // Default to no sorting
+      }
+    });
+
+    // Clean up display_orders for entities that no longer exist
+    Object.keys(newConfig.display_orders).forEach(entityId => {
+      if (!entities.includes(entityId)) {
+        delete newConfig.display_orders[entityId];
+      }
+    });
+
     // Prioritize card_mod if available, then fall back to custom_card_mod
     if (config.card_mod && typeof config.card_mod === 'object') {
       newConfig.custom_card_mod = config.card_mod;
@@ -398,15 +419,16 @@ class TodoSwipeCard extends HTMLElement {
    */
   _needsFullRebuild(oldConfig, newConfig) {
     if (!oldConfig) return true;
-
+  
     // Check for changes that require full rebuild
     const entitiesChanged = JSON.stringify(oldConfig.entities) !== JSON.stringify(newConfig.entities);
     const backgroundImagesChanged = JSON.stringify(oldConfig.background_images) !== JSON.stringify(newConfig.background_images);
+    const displayOrdersChanged = JSON.stringify(oldConfig.display_orders) !== JSON.stringify(newConfig.display_orders); // Add this line
     const paginationChanged = oldConfig.show_pagination !== newConfig.show_pagination;
     const createFieldChanged = oldConfig.show_create !== newConfig.show_create;
     const cardModChanged = JSON.stringify(oldConfig.card_mod) !== JSON.stringify(newConfig.card_mod);
-
-    return entitiesChanged || backgroundImagesChanged || paginationChanged || createFieldChanged || cardModChanged;
+  
+    return entitiesChanged || backgroundImagesChanged || displayOrdersChanged || paginationChanged || createFieldChanged || cardModChanged; // Update this line
   }
 
   /**
@@ -1219,12 +1241,18 @@ class TodoSwipeCard extends HTMLElement {
     // Merge internal and custom styling using the optimized method
     const mergedCardModStyle = this._mergeCardModStyles(internalStyles, customCardModStyle);
     
-    // Create the todo-list card with merged card-mod styling
+    // Get display order for this entity
+    const displayOrder = this._config.display_orders && this._config.display_orders[entityId] 
+      ? this._config.display_orders[entityId] 
+      : 'none';
+    
+    // Create the todo-list card with merged card-mod styling and display order
     const cardConfig = {
       type: 'todo-list',
       entity: entityId,
       hide_create: !this._config.show_create,
       hide_completed: !this._config.show_completed,
+      display_order: displayOrder, // Add this line
       card_mod: {
         style: mergedCardModStyle
       }
@@ -1459,28 +1487,89 @@ class TodoSwipeCard extends HTMLElement {
           display: none !important;
         }
 
-        /* List item height and spacing with text cutoff before trash icon */
+        /* List item base styling */
         ha-check-list-item {
           min-height: var(--todo-swipe-card-item-height, 0px) !important;
           --mdc-list-item-graphic-margin: var(--todo-swipe-card-item-margin, 5px) !important;
           color: ${textColor} !important;
           padding-right: 40px !important; /* Reserve space for delete button plus 5px margin */
+          align-items: flex-start !important; /* Align checkbox to top */
         }
 
-        /* Text content styling with cutoff */
-        ha-check-list-item .mdc-list-item__text,
-        ha-check-list-item .mdc-list-item__primary-text {
-          max-width: calc(100% - 70px) !important; /* Account for checkbox (30px) + delete button (40px) + spacing (5px) */
-          overflow: hidden !important;
-          text-overflow: ellipsis !important;
-          white-space: nowrap !important;
+        /* Enable text wrapping for text content containers */
+        ha-check-list-item .mdc-list-item__text {
+          max-width: calc(100% - 70px) !important; /* Account for checkbox (30px) + delete button (40px) + spacing */
+          overflow: visible !important;
+          text-overflow: clip !important;
+          white-space: normal !important;
           color: ${textColor} !important;
+          line-height: 1.4 !important;
+        }
+
+        /* Ensure primary text wraps properly */
+        ha-check-list-item .mdc-list-item__primary-text {
+          max-width: calc(100% - 70px) !important;
+          overflow: visible !important;
+          text-overflow: clip !important;
+          white-space: normal !important;
+          color: ${textColor} !important;
+          line-height: 1.4 !important;
+        }
+
+        /* Apply text wrapping at the item level to override Material Design defaults */
+        ha-check-list-item span,
+        ha-check-list-item .mdc-deprecated-list-item__text,
+        ha-check-list-item .mdc-deprecated-list-item__primary-text {
+          white-space: normal !important;
+          word-wrap: break-word !important;
+          overflow-wrap: break-word !important;
+        }
+
+        /* Ensure checkbox graphic stays at top when text wraps */
+        ha-check-list-item .mdc-list-item__graphic {
+          align-self: flex-start !important;
+          margin-top: 2px !important; /* Small offset to align with first line of text */
+        }
+   
+        /* Special handling for multiline items (with due dates) */
+        ha-check-list-item.multiline {
+          align-items: flex-start !important;
+          --check-list-item-graphic-margin-top: 0px !important; 
+        }
+
+        ha-check-list-item.multiline .mdc-list-item__text {
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: clip !important;
+        }
+        
+        /* Target the .column div (which contains summary and due date) inside a multiline item */
+        ha-check-list-item.multiline .column {
+          margin-top: 0 !important;
+          margin-bottom: 0 !important;
+        }
+
+        /* Allow text within the summary and due date lines themselves to wrap if it's very long */
+        ha-check-list-item.multiline .summary,
+        ha-check-list-item.multiline .due {
+          white-space: normal !important; /* Allow text to wrap */
+        }
+
+        /* Custom font size for due date text */
+        ha-check-list-item.multiline .due {
+          font-size: var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-typography-size, 11px)) !important;
+        }
+
+        /* Apply custom font size to secondary text (where due date appears) */
+        ha-check-list-item .mdc-list-item__secondary-text,
+        ha-check-list-item .mdc-deprecated-list-item__secondary-text {
+          font-size: var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-typography-size, 11px)) !important;
         }
 
         /* Content area constraint */
         ha-check-list-item .mdc-list-item__content {
           max-width: calc(100% - 75px) !important;
-          overflow: hidden !important;
+          overflow: visible !important;
         }
       `
     };
@@ -2063,6 +2152,15 @@ class TodoSwipeCard extends HTMLElement {
  * Card editor for TodoSwipeCard
  */
 class TodoSwipeCardEditor extends LitElement {
+
+  static TodoSortMode = {
+    NONE: 'none',
+    ALPHA_ASC: 'alpha_asc', 
+    ALPHA_DESC: 'alpha_desc',
+    DUEDATE_ASC: 'duedate_asc',
+    DUEDATE_DESC: 'duedate_desc'
+  };
+
   static get properties() {
     return {
       hass: { type: Object },
@@ -2106,6 +2204,7 @@ class TodoSwipeCardEditor extends LitElement {
         });
       }
     }
+    
   }
 
   setConfig(config) {
@@ -2150,13 +2249,20 @@ class TodoSwipeCardEditor extends LitElement {
         customCardMod = {};
       }
       
+      // Ensure display_orders is an object
+      let displayOrders = config.display_orders;
+      if (!displayOrders || typeof displayOrders !== 'object') {
+        displayOrders = {};
+      }
+
       // Merge config, overriding stub with provided values plus our cleaned entities and spacing
       this._config = {
         ...this._config,
         ...config,
         entities,
         card_spacing: cardSpacing,
-        custom_card_mod: customCardMod
+        custom_card_mod: customCardMod,
+        display_orders: displayOrders
       };
     }
     
@@ -2245,6 +2351,8 @@ class TodoSwipeCardEditor extends LitElement {
       }
       .entity-row ha-icon-button {
         flex-shrink: 0;
+        width: 40px;
+        height: 40px;
       }
       .section-header {
         margin-top: 24px;
@@ -2389,6 +2497,22 @@ class TodoSwipeCardEditor extends LitElement {
         padding-left: 8px;
         border-left: 1px solid var(--divider-color);
       }
+
+      .sort-row {
+        display: flex;
+        align-items: center;
+        margin-top: 8px;
+        margin-bottom: 16px;
+        margin-left: 0px;
+        width: 100%;
+        padding-left: 0px;
+      }
+
+      .sort-row ha-select {
+        width: calc(100% - 48px);
+        margin-right: 48px;
+        display: block;
+      }
     `;
   }
 
@@ -2473,6 +2597,7 @@ class TodoSwipeCardEditor extends LitElement {
     // Create deep copies of arrays/objects to ensure change detection
     const entities = [...this._config.entities];
     const backgroundImages = {...this._config.background_images};
+    const displayOrders = {...this._config.display_orders}; // Add this line
     
     // Get the entity being removed
     const removedEntityId = entities[index];
@@ -2480,16 +2605,20 @@ class TodoSwipeCardEditor extends LitElement {
     // Remove the entity
     entities.splice(index, 1);
     
-    // Also remove associated background image if it exists
+    // Also remove associated background image and display order if they exist
     if (removedEntityId && backgroundImages[removedEntityId]) {
         delete backgroundImages[removedEntityId];
     }
-
+    if (removedEntityId && displayOrders[removedEntityId]) {
+        delete displayOrders[removedEntityId]; // Add this line
+    }
+  
     // Create a new config with the updated arrays
     const newConfig = { 
         ...this._config, 
         entities, 
-        background_images: backgroundImages 
+        background_images: backgroundImages,
+        display_orders: displayOrders // Add this line
     };
     
     // Update internal state first
@@ -2504,12 +2633,11 @@ class TodoSwipeCardEditor extends LitElement {
   }
 
   _entityChanged(ev) {
-    // Safely handle the case where index might be null/undefined
     const index = parseInt(ev.target.getAttribute('data-index'));
     if (isNaN(index)) return;
     
     const newValue = ev.detail?.value || ev.target.value || "";
-    const oldValue = this._config.entities[index]; // Get the old value
+    const oldValue = this._config.entities[index];
     
     // Check if the value actually changed
     if (newValue === oldValue) return;
@@ -2517,23 +2645,31 @@ class TodoSwipeCardEditor extends LitElement {
     // Create deep copies to ensure change detection
     const entities = [...this._config.entities];
     const backgroundImages = {...this._config.background_images};
+    const displayOrders = {...this._config.display_orders}; // Add this line
     
     // Update the entity
     entities[index] = newValue;
-
-    // Update background image key if entity changed
+  
+    // Update background image and display order keys if entity changed
     if (oldValue && backgroundImages[oldValue]) {
-        if (newValue) { // If new value is not empty, transfer the background
+        if (newValue) {
             backgroundImages[newValue] = backgroundImages[oldValue];
         }
-        delete backgroundImages[oldValue]; // Remove the old key entry
+        delete backgroundImages[oldValue];
     }
-
+    if (oldValue && displayOrders[oldValue]) { // Add this block
+        if (newValue) {
+            displayOrders[newValue] = displayOrders[oldValue];
+        }
+        delete displayOrders[oldValue];
+    }
+  
     // Create a new config with the updates
     const newConfig = { 
         ...this._config, 
         entities, 
-        background_images: backgroundImages 
+        background_images: backgroundImages,
+        display_orders: displayOrders // Add this line
     };
     
     // Update internal state first
@@ -2573,6 +2709,44 @@ class TodoSwipeCardEditor extends LitElement {
     
     // Use debounced dispatch for background image changes
     this._debounceDispatch(newConfig);
+  }
+
+  // Add display order change handler
+  _displayOrderChanged(ev) {
+    if (!ev.target) return;
+    
+    const entityId = ev.target.getAttribute('data-entity');
+    if (!entityId) return;
+    
+    const sortOrder = ev.target.value || 'none';
+    
+    // Create a new display_orders object
+    const displayOrders = { ...this._config.display_orders };
+    displayOrders[entityId] = sortOrder;
+
+    // Create new config with updated display_orders
+    const newConfig = { ...this._config, display_orders: displayOrders };
+    
+    // Update internal state first
+    this._config = newConfig;
+    
+    // Use debounced dispatch for display order changes
+    this._debounceDispatch(newConfig);
+  }
+
+  _stopPropagation(e) {
+    e.stopPropagation();
+  }
+
+  // Add helper method to get sort mode options
+  _getSortModeOptions() {
+    return [
+      { value: TodoSwipeCardEditor.TodoSortMode.NONE, label: 'Default' },
+      { value: TodoSwipeCardEditor.TodoSortMode.ALPHA_ASC, label: 'Alphabetical A-Z' },
+      { value: TodoSwipeCardEditor.TodoSortMode.ALPHA_DESC, label: 'Alphabetical Z-A' },
+      { value: TodoSwipeCardEditor.TodoSortMode.DUEDATE_ASC, label: 'Due Date (Earliest First)' },
+      { value: TodoSwipeCardEditor.TodoSortMode.DUEDATE_DESC, label: 'Due Date (Latest First)' }
+    ];
   }
 
   render() {
@@ -2615,6 +2789,23 @@ class TodoSwipeCardEditor extends LitElement {
                 title="Remove this list"
               ></ha-icon-button>
             </div>
+            ${entity && entity.trim() !== "" ? html`
+              <div class="sort-row">
+                <ha-select
+                  .label=${"Sort Order"}
+                  .value=${this._config.display_orders && this._config.display_orders[entity] || 'none'}
+                  data-entity=${entity}
+                  @selected=${this._displayOrderChanged}
+                  @closed=${this._stopPropagation}
+                >
+                  ${this._getSortModeOptions().map(option => html`
+                    <mwc-list-item .value=${option.value}>
+                      ${option.label}
+                    </mwc-list-item>
+                  `)}
+                </ha-select>
+              </div>
+            ` : ''}
           `)}
           <div class="add-entity-button">
             <button class="add-todo-button" @click=${this._addEntity}>
@@ -2747,7 +2938,7 @@ class TodoSwipeCardEditor extends LitElement {
         <!-- Version display -->
         <div class="version-display">
           <div class="version-text">Todo Swipe Card</div>
-          <div class="version-badge">v1.6.0</div>
+          <div class="version-badge">v1.6.1</div>
         </div>
       </div>
     `;
@@ -2777,7 +2968,7 @@ if (!registered) {
 
 // Version logging
 console.info(
-  `%c TODO-SWIPE-CARD %c v1.6.0 %c - A swipeable card for to-do lists`,
+  `%c TODO-SWIPE-CARD %c v1.6.1 %c - A swipeable card for to-do lists`,
   "color: white; background: #4caf50; font-weight: 700;",
   "color: #4caf50; background: white; font-weight: 700;",
   "color: grey; background: white; font-weight: 400;"
