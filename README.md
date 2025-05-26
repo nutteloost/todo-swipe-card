@@ -153,6 +153,7 @@ card_mod:
 
 /* Typography and Layout */
 --todo-swipe-card-typography-size:                      /* Base font size for todo items (default: 11px) */
+--todo-swipe-card-typography-size-due-date:             /* Font size for due dates (default: 11px) */
 --todo-swipe-card-item-height:                          /* Minimum height of individual todo items (default: 0px) */
 --todo-swipe-card-item-margin:                          /* Spacing between checkbox and todo item text (default: 5px) */
 
