@@ -205,11 +205,12 @@ card_mod:
       --todo-swipe-card-background: #fafafa;
       --todo-swipe-card-text-color: #212121;
       --todo-swipe-card-typography-size: 13px;
+      --todo-swipe-card-typography-size-due-date: 10px;
       --todo-swipe-card-item-margin: 6px;
       
       --todo-swipe-card-checkbox-color: rgba(97, 97, 97, 0.3);
-      --todo-swipe-card-checkbox-checked-color: #4caf50;
-      --todo-swipe-card-checkbox-checkmark-color: #ffffff;
+      --todo-swipe-card-checkbox-checked-color: transparent;
+      --todo-swipe-card-checkbox-checkmark-color: transparent;
       
       --todo-swipe-card-field-line-color: #e0e0e0;
       --todo-swipe-card-placeholder-color: #757575;
