@@ -58,8 +58,10 @@ The Todo Swipe Card includes a visual editor that appears when you add or edit t
 - Visual toggle for pagination dots
 - Simple number input for card spacing
 - Background image configuration for each to-do list
+- Display order setting of todo list items per list
 - Display options for completed items, add buttons, and more
 - Real-time preview of changes
+- Auto-Migration button for deprecated configurations
 
 #### Search for 'Todo Swipe Card'
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/visual_editor_search.png" width="250">
@@ -81,9 +83,21 @@ This card can be configured using the visual editor or YAML.
 | show_completed_menu | boolean | false | Show/hide delete completed items button |
 | delete_confirmation | boolean | false | Show confirmation dialog when deleting completed items |
 | card_spacing | number | 15 | Space between cards in pixels |
-| background_images | object | {} | Object mapping entity IDs to background image URLs |
+
+
+### Entity Configuration Options
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| entity | string | Required | Todo list entity ID |
+| show_title | boolean | false | Show custom title above todo list |
+| title | string | Optional | Custom title text (Only used if show_title is true) |
+| background_image | string | Optiona; | Background image URL for this entity |
+| display_order | string | none | Sort order: `none`, `alpha_asc`, `alpha_desc`, `duedate_asc`, `duedate_desc` |
+
 
 ### Example Configuration
+
+#### Simple configuration
 ```yaml
 type: custom:todo-swipe-card
 entities:
@@ -91,21 +105,88 @@ entities:
   - todo.home_tasks
   - todo.work_projects
 show_pagination: true
+show_completed: true
+card_spacing: 15
+```
+
+#### Advanced Configuration 
+
+```yaml
+type: custom:todo-swipe-card
+entities:
+  - entity: todo.shopping_list
+    background_image: /local/images/shopping_bg.jpg
+    show_title: true
+    title: "Shopping List"
+    display_order: alpha_asc
+  - entity: todo.home_tasks
+    background_image: /local/images/home_bg.jpg
+    show_title: true
+    title: "Home Tasks"
+    display_order: duedate_asc
+  - entity: todo.work_projects
+    display_order: none
+show_pagination: true
 show_addbutton: true
 show_create: true
 show_completed: true
 show_completed_menu: true
 delete_confirmation: true
-card_spacing: 15
+card_spacing: 10
+```
+
+
+## Migration from v1.x
+
+If you're upgrading from v1.x, your existing configuration will partially work, but you'll see a migration warning in the visual editor and you should upgrade to the new format. If you click on the 'Auto-Migrate Configuration' button, your (yaml) configuration will automatically update to the new format. 
+
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/auto-migration-configuration.png" width="400" alt="Example">
+
+### Using Visual Editor (Recommended)
+1. Open the card in edit mode
+2. You'll see a migration warning at the top
+3. Click "Auto-Migrate Configuration" to instantly convert to the new format
+4. Save the card
+
+<details>
+<summary><strong>Manual Migration (Click to expand)</strong></summary>
+
+### Manual Migration
+Convert your old global configuration to the new entity-centric format:
+
+**Old Format:**
+```yaml
+entities:
+  - todo.shopping_list
+  - todo.home_tasks
 background_images:
   todo.shopping_list: /local/images/shopping_bg.jpg
-  todo.home_tasks: /local/images/home_bg.jpg
+show_titles:
+  todo.shopping_list: true
+entity_titles:
+  todo.shopping_list: "My Shopping"
+display_orders:
+  todo.shopping_list: alpha_asc
 ```
+
+New Format:
+```yaml
+entities:
+  - entity: todo.shopping_list
+    background_image: /local/images/shopping_bg.jpg
+    show_title: true
+    title: "My Shopping"
+    display_order: alpha_asc
+  - entity: todo.home_tasks
+```
+</details>
+
+
 
 ## Customizing and Theming
 > ⚠ **Important**: This card requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed and working properly. Please note that since Todo Swipe Card applies internal card-mod styling for core functionality, some custom styling may conflict or behave unexpectedly. Test your customizations thoroughly and use CSS specificity or `!important` declarations when necessary.
 
-Todo Swipe Card v1.6.0 provides extensive customization capabilities through two primary methods: Home Assistant themes and card-mod styling. The card supports over twenty CSS variables that control every aspect of its appearance, from basic colors and typography to sophisticated pagination styling and transition effects.
+The Todo Swipe Card provides extensive customization capabilities through two primary methods: Home Assistant themes and card-mod styling. The card supports over fourty CSS variables that control every aspect of its appearance, from basic colors and typography to sophisticated pagination styling and transition effects.
 
 **Simplified Customization Approach**: Todo Swipe Card includes CSS variables that make customization much easier compared to traditional card-mod styling. Instead of having to figure out complex CSS selectors or inspect the card's internal structure, you can simply use these predefined variables to customize colors, sizes, and other visual elements. This means you can create great-looking themes without needing to be a CSS expert or spending time hunting down the right selectors to target specific elements.
 
@@ -149,13 +230,33 @@ card_mod:
 ```yaml
 /* Core Appearance */
 --todo-swipe-card-background:                           /* Main card background color or gradient */
---todo-swipe-card-text-color:                           /* Primary text color for all content including items and placeholders */
+--todo-swipe-card-text-color:                           /* Primary text color for all todo items, excluding descriptions and due dates */
 
 /* Typography and Layout */
---todo-swipe-card-typography-size:                      /* Base font size for todo items (default: 11px) */
---todo-swipe-card-typography-size-due-date:             /* Font size for due dates (default: 11px) */
+--todo-swipe-card-font-size:                            /* Base font size for todo items (default: 11px) */
+--todo-swipe-card-font-size-due-date:                   /* Font size for due dates and associated icon (default: 11px) */
+--todo-swipe-card-font-color-description:               /* Color of the description text of todo items */
+--todo-swipe-card-font-color-due-date:                  /* Color of the due dates and associated icon */
+--todo-swipe-card-font-color-due-date-overdue:          /* Color of overdue due dates text and associated icon */
 --todo-swipe-card-item-height:                          /* Minimum height of individual todo items (default: 0px) */
 --todo-swipe-card-item-margin:                          /* Spacing between checkbox and todo item text (default: 5px) */
+
+/* Item Spacing and Line Height */
+--todo-swipe-card-line-height:                          /* Line height for main todo text when it wraps to multiple lines (default: 1.4) */
+--todo-swipe-card-item-spacing:                         /* Consistent margin between todo items (default: 8px) */
+--todo-swipe-card-description-margin-top:               /* Space above description text (default: 2px) */
+--todo-swipe-card-due-date-margin-top:                  /* Space above due date (default: 4px) */
+
+/* Title Styling */
+--todo-swipe-card-title-height:                         /* Height of entity titles (default: 40px) */
+--todo-swipe-card-title-background:                     /* Background color of entity titles */
+--todo-swipe-card-title-color:                          /* Text color of entity titles */
+--todo-swipe-card-title-font-size:                      /* Font size of entity titles (default: 16px) */
+--todo-swipe-card-title-font-weight:                    /* Font weight of entity titles (default: 500) */
+--todo-swipe-card-title-border-color:                   /* Border color below entity titles */
+--todo-swipe-card-title-border-width:                   /* Border width below entity titles (default: 1px) */
+--todo-swipe-card-title-padding-horizontal:             /* Horizontal padding of entity titles (default: 16px) */
+--todo-swipe-card-title-justify:                        /* Title alignment: flex-start, center, flex-end (default: center) */
 
 /* Checkbox Styling */
 --todo-swipe-card-checkbox-color:                        /* Color of unchecked checkboxes, use rgba values to also control opacity (rgba(255, 0, 0, 0.6);) */
@@ -184,19 +285,101 @@ card_mod:
 --todo-swipe-card-transition-easing:                     /* Easing function for transitions (default: ease-out) */
 
 /* Interactive Elements */
+--todo-swipe-card-delete-button-top:                     /* Manual positioning of delete button from top */
 --todo-swipe-card-delete-button-color:                   /* Color of the delete completed items button */
 --todo-swipe-card-add-button-color:                      /* Color of the add item button */
 ```
 
 ### Styling Examples
 
-#### Example 1: Minimalist Light Theme with Square Indicators
+#### Example 1
 
-<table style="table-layout: fixed; width: 100%;">
-<tr>
-<td style="width: 60%; vertical-align: top; overflow: hidden;">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_advanced.png" style="width: 100%;max-width: 320px;" alt="Example 1">
 
-<div style="overflow-x: auto; white-space: nowrap;">
+<details>
+<summary><strong>Example 1 (Advanced) Configuration:</strong></summary>
+
+```yaml
+type: custom:todo-swipe-card
+entities:
+  - entity: todo.shipping_list
+    show_title: true
+    title: 🛒 Shopping List
+    display_order: alpha_asc
+  - entity: todo.work_projects
+    show_title: true
+    title: 💼 Work Projects
+    display_order: duedate_desc
+card_spacing: 10
+show_pagination: true
+show_create: true
+show_addbutton: true
+show_completed: true
+show_completed_menu: true
+delete_confirmation: true
+card_mod:
+  style: |
+    :host {
+      --todo-swipe-card-background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --todo-swipe-card-text-color: #ffffff;
+      --todo-swipe-card-item-spacing: 8px;   
+
+      /* Typography */
+      --todo-swipe-card-font-size: 11px;
+      --todo-swipe-card-font-size-due-date: 10px;
+      
+      /* Title styling - left aligned */
+      --todo-swipe-card-title-height: 35px;
+      --todo-swipe-card-title-background: linear-gradient(135deg, #667eea 0%, #764ba2 10%);
+      --todo-swipe-card-title-color: #ffffff;
+      --todo-swipe-card-title-font-size: 18px;
+      --todo-swipe-card-title-font-weight: 400;
+      --todo-swipe-card-title-justify: flex-start;
+      --todo-swipe-card-title-border-color: rgba(255, 255, 255, 0.2);
+      --todo-swipe-card-title-border-width: 3px;
+      
+      /* Due date styling */
+      --todo-swipe-card-font-color-due-date: rgba(255, 255, 255, 0.8);
+      --todo-swipe-card-font-color-due-date-overdue: #ff6b6b;
+      --todo-swipe-card-font-color-description: rgba(255, 255, 255, 0.7);
+
+      /* Tighter line spacing */
+      --todo-swipe-card-line-height: 1.2;
+      --todo-swipe-card-description-margin-top: 2px;
+      --todo-swipe-card-due-date-margin-top: 1px;
+      
+      /* Modern checkbox styling */
+      --todo-swipe-card-checkbox-color: rgba(255, 255, 255, 0.3);
+      --todo-swipe-card-checkbox-checked-color: #4ecdc4;
+      --todo-swipe-card-checkbox-checkmark-color: #ffffff;
+      --todo-swipe-card-checkbox-size: 22px;
+      
+      /* Input field styling */
+      --todo-swipe-card-placeholder-color: rgba(255, 255, 255, 0.7);
+      --todo-swipe-card-placeholder-opacity: 0.5;
+      
+      /* Interactive elements */
+      --todo-swipe-card-add-button-color: #4ecdc4;
+      --todo-swipe-card-delete-button-color: #ff6b6b;
+      
+      /* Pagination Dots */
+      --todo-swipe-card-pagination-dot-size: 10px;
+      --todo-swipe-card-pagination-dot-active-color: #4ecdc4;
+      --todo-swipe-card-pagination-dot-inactive-color: rgba(255, 255, 255, 0.4);
+      --todo-swipe-card-pagination-dot-spacing: 2px;
+      --todo-swipe-card-pagination-bottom: 12px;
+      --todo-swipe-card-pagination-dot-active-size-multiplier: 1.5;
+    }
+```
+</details>
+
+
+#### Example 2
+
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; max-width: 320px;" alt="Example 2">
+
+<details>
+<summary><strong>Example 2 Configuration</strong></summary>
 
 ```yaml
 card_mod:
@@ -204,8 +387,8 @@ card_mod:
     :host {
       --todo-swipe-card-background: #fafafa;
       --todo-swipe-card-text-color: #212121;
-      --todo-swipe-card-typography-size: 13px;
-      --todo-swipe-card-typography-size-due-date: 10px;
+      --todo-swipe-card-font-size: 13px;
+      --todo-swipe-card-font-size-due-date: 10px;
       --todo-swipe-card-item-margin: 6px;
       
       --todo-swipe-card-checkbox-color: rgba(97, 97, 97, 0.3);
@@ -227,22 +410,14 @@ card_mod:
       --todo-swipe-card-transition-easing: ease-out;
     }
 ```
+</details>
 
-</div>
-</td>
-<td style="width: 40%; vertical-align: top;">
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; max-width: 320px;" alt="Example 1">
-</td>
-</tr>
-</table>
+#### Example 3
 
-#### Example 2: Vibrant Accessibility Theme
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" style="width: 100%; max-width: 320px;" alt="Example 3">
 
-<table style="table-layout: fixed; width: 100%;">
-<tr>
-<td style="width: 60%; vertical-align: top; overflow: hidden;">
-
-<div style="overflow-x: auto; white-space: nowrap;">
+<details>
+<summary><strong>Example 3 Configuration</strong></summary>
 
 ```yaml
 card_mod:
@@ -250,7 +425,7 @@ card_mod:
     :host {
       --todo-swipe-card-background: pink;
       --todo-swipe-card-text-color: grey;
-      --todo-swipe-card-typography-size: 16px;
+      --todo-swipe-card-font-size: 16px;
 
       --todo-swipe-card-checkbox-color: rgba(255, 0, 0, 0.75);
       --todo-swipe-card-checkbox-checked-color: green;
@@ -263,14 +438,7 @@ card_mod:
       --todo-swipe-card-delete-button-color: purple;
     }
 ```
-
-</div>
-</td>
-<td style="width: 40%; vertical-align: top;">
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" style="width: 100%; max-width: 320px;" alt="Example 2">
-</td>
-</tr>
-</table>
+</details>
 
 ### My Other Custom Cards
 
