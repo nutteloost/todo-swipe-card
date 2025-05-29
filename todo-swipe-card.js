@@ -7,13 +7,16 @@
  * Requires card-mod to be installed: https://github.com/thomasloven/lovelace-card-mod
  * 
  * @author nutteloost
- * @version 1.6.1
+ * @version ${VERSION}
  * @license MIT
  * @see {@link https://github.com/nutteloost/todo-swipe-card}
  */
 
 
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.5.1/lit-element.js?module";
+
+// Version number
+const VERSION = '2.0.0';
 
 // Configurable debug mode - set to false for production
 const DEBUG = false;
@@ -38,7 +41,6 @@ class TodoSwipeCard extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._config = {};
     this._hass = null;
-    this._hassLastUpdated = null; // Track last update time
     this.cards = [];
     this.currentIndex = 0;
     this.slideWidth = 0;
@@ -46,14 +48,15 @@ class TodoSwipeCard extends HTMLElement {
     this.sliderElement = null;
     this.paginationElement = null;
     this.initialized = false;
-    this.building = false;
     this._menuObservers = [];
     this._dynamicStyleElement = null;
-    this._configUpdateTimer = null; // Timer for debouncing config updates
-    this._buildPromise = null; // Track ongoing build operations
-    this._cardHelpers = null; // Cache card helpers
-    this._lastConfig = null; // Track last config to detect real changes
-    this._updateThrottle = null; // Throttle hass updates
+    this._configUpdateTimer = null;
+    this._buildPromise = null;
+    this._cardHelpers = null;
+    this._lastConfig = null;
+    this._updateThrottle = null;
+    this._lastHassUpdate = null;
+    this._menuObserverTimeout = null;
   }
 
   /**
@@ -62,15 +65,14 @@ class TodoSwipeCard extends HTMLElement {
    */
   static getStubConfig() {
     return {
+      entities: [],
+      card_spacing: 15,
       show_pagination: true,
-      show_addbutton: false,
       show_create: true,
+      show_addbutton: false,
       show_completed: false,
       show_completed_menu: false,
-      delete_confirmation: false,
-      card_spacing: 15,
-      custom_card_mod: {},
-      display_orders: {}
+      delete_confirmation: false
     };
   }
   
@@ -108,7 +110,146 @@ class TodoSwipeCard extends HTMLElement {
            this._config.entities && 
            Array.isArray(this._config.entities) && 
            this._config.entities.length > 0 &&
-           this._config.entities.some(entity => entity && entity.trim() !== "");
+           this._config.entities.some(entity => {
+             if (typeof entity === 'string') {
+               return entity && entity.trim() !== "";
+             }
+             return entity && entity.entity && entity.entity.trim() !== "";
+           });
+  }
+
+  /**
+   * Detect legacy configuration format
+   * @param {Object} config - Configuration to check
+   * @returns {Object} Detection result with isLegacy flag and found properties
+   * @private
+   */
+  _detectLegacyConfig(config) {
+    const legacyProperties = [
+      'background_images',
+      'display_orders', 
+      'entity_titles',
+      'show_titles'
+    ];
+    
+    const foundLegacyProps = legacyProperties.filter(prop => 
+      config.hasOwnProperty(prop) && config[prop] && Object.keys(config[prop]).length > 0
+    );
+    
+    return {
+      isLegacy: foundLegacyProps.length > 0,
+      legacyProperties: foundLegacyProps
+    };
+  }
+
+  /**
+   * Migrate legacy config to new entity-centric format
+   * @param {Object} oldConfig - Legacy configuration
+   * @returns {Object} Migrated configuration
+   * @private
+   */
+  _migrateLegacyConfig(oldConfig) {
+    // Convert entities to new format
+    let migratedEntities = [];
+    if (oldConfig.entities && Array.isArray(oldConfig.entities)) {
+      migratedEntities = oldConfig.entities.map(entity => {
+        if (typeof entity === 'string') {
+          const entityConfig = { entity };
+          
+          // Migrate background image
+          if (oldConfig.background_images && oldConfig.background_images[entity]) {
+            entityConfig.background_image = oldConfig.background_images[entity];
+          }
+          
+          // Migrate display order
+          if (oldConfig.display_orders && oldConfig.display_orders[entity]) {
+            entityConfig.display_order = oldConfig.display_orders[entity];
+          }
+          
+          // Migrate show title
+          if (oldConfig.show_titles && oldConfig.show_titles[entity]) {
+            entityConfig.show_title = oldConfig.show_titles[entity];
+          }
+          
+          // Migrate entity title
+          if (oldConfig.entity_titles && oldConfig.entity_titles[entity]) {
+            entityConfig.title = oldConfig.entity_titles[entity];
+          }
+          
+          return entityConfig;
+        }
+        return entity; // Already in new format
+      });
+    }
+    
+    // Start with all properties from old config
+    const newConfig = { ...oldConfig };
+    
+    // Remove legacy properties
+    delete newConfig.background_images;
+    delete newConfig.display_orders;
+    delete newConfig.entity_titles;
+    delete newConfig.show_titles;
+    delete newConfig.custom_card_mod;
+    
+    // Update entities with migrated format
+    newConfig.entities = migratedEntities;
+    
+    // Rebuild config in desired order with type first, preserving all other properties
+    const orderedConfig = {
+      type: newConfig.type,
+      entities: newConfig.entities,
+      ...Object.fromEntries(
+        Object.entries(newConfig).filter(([key]) => key !== 'type' && key !== 'entities')
+      )
+    };
+    
+    return orderedConfig;
+  }
+
+  /**
+   * Get entity ID from entity configuration (handles both string and object formats)
+   * @param {string|Object} entity - Entity configuration
+   * @returns {string} Entity ID
+   * @private
+   */
+  _getEntityId(entity) {
+    if (typeof entity === 'string') {
+      return entity;
+    }
+    return entity?.entity || '';
+  }
+
+  /**
+   * Get all entity IDs from current configuration
+   * @returns {Array<string>} Array of entity IDs
+   * @private
+   */
+  _getAllEntityIds() {
+    if (!this._config?.entities) return [];
+    return this._config.entities
+      .map(entity => this._getEntityId(entity))
+      .filter(entityId => entityId && entityId.trim() !== "");
+  }
+
+  /**
+   * Get entity configuration by ID
+   * @param {string} entityId - Entity ID to find
+   * @returns {Object|null} Entity configuration object or null if not found
+   * @private
+   */
+  _getEntityConfig(entityId) {
+    if (!this._config?.entities) return null;
+    
+    const entity = this._config.entities.find(entity => 
+      this._getEntityId(entity) === entityId
+    );
+    
+    if (typeof entity === 'string') {
+      return { entity: entityId };
+    }
+    
+    return entity || null;
   }
 
   /**
@@ -136,21 +277,60 @@ class TodoSwipeCard extends HTMLElement {
   _shouldUpdateChildCards(hass) {
     if (!this._hass || !hass) return true;
     
+    // Skip if the hass objects are the same reference (no actual change)
+    if (this._hass === hass) return false;
+    
+    // Add a timestamp-based throttle to prevent rapid successive updates
+    const now = Date.now();
+    if (this._lastHassUpdate && (now - this._lastHassUpdate) < 250) {
+      return false;
+    }
+    this._lastHassUpdate = now;
+    
     // Check if any of our monitored entities have changed
-    const entities = this._config.entities || [];
-    for (const entityId of entities) {
+    const entityIds = this._getAllEntityIds();
+    let hasRelevantChanges = false;
+    
+    for (const entityId of entityIds) {
       if (!entityId || entityId.trim() === "") continue;
       
       const oldState = this._hass.states[entityId];
       const newState = hass.states[entityId];
       
-      // Check if the entity state or attributes have changed
-      if (!oldState || !newState) return true;
-      if (oldState.state !== newState.state) return true;
-      if (JSON.stringify(oldState.attributes) !== JSON.stringify(newState.attributes)) return true;
+      // Check if the entity state or attributes have changed significantly
+      if (!oldState || !newState) {
+        hasRelevantChanges = true;
+        break;
+      }
+      
+      // Only update for meaningful changes, not just timestamp updates
+      if (oldState.state !== newState.state) {
+        hasRelevantChanges = true;
+        break;
+      }
+      
+      // Check for changes in todo items specifically
+      const oldItems = oldState.attributes?.items || [];
+      const newItems = newState.attributes?.items || [];
+      
+      // Compare item count first (quick check)
+      if (oldItems.length !== newItems.length) {
+        hasRelevantChanges = true;
+        break;
+      }
+      
+      // Deep compare items (but limit to prevent excessive processing)
+      if (oldItems.length > 0 && oldItems.length < 100) { // Limit to prevent performance issues
+        const oldItemsStr = JSON.stringify(oldItems);
+        const newItemsStr = JSON.stringify(newItems);
+        if (oldItemsStr !== newItemsStr) {
+          hasRelevantChanges = true;
+          break;
+        }
+      }
     }
     
-    return false;
+    return hasRelevantChanges;
   }
 
   /**
@@ -295,6 +475,24 @@ class TodoSwipeCard extends HTMLElement {
   }
 
   /**
+   * Get the actual todo-list card element from a potentially wrapped element
+   * @param {HTMLElement} element - The element (might be wrapped)
+   * @returns {HTMLElement} The actual todo-list card element
+   * @private
+   */
+  _getActualCardElement(element) {
+    // If it's a wrapper, find the card inside
+    if (element && element.classList && element.classList.contains('todo-card-with-title-wrapper')) {
+      // The card is inside the second child (cardContainer) of the wrapper
+      const cardContainer = element.children[1]; // First child is title, second is card container
+      if (cardContainer && cardContainer.firstElementChild) {
+        return cardContainer.firstElementChild; // This is the actual card element
+      }
+    }
+    return element;
+  }
+
+  /**
    * Set card configuration with improved debouncing
    * @param {Object} config - Card configuration
    */
@@ -314,14 +512,25 @@ class TodoSwipeCard extends HTMLElement {
       }
     }
     
-    // Clean up entities (remove empty values)
-    entities = entities.filter(e => e && e.trim() !== "");
+    // Normalize entities to support both string and object formats
+    entities = entities.map(entity => {
+      if (typeof entity === 'string') {
+        // Convert string to object format, but keep it as string if empty
+        return entity.trim() === "" ? entity : { entity: entity };
+      }
+      return entity; // Already object format
+    }).filter(entity => {
+      if (typeof entity === 'string') {
+        return entity !== ""; // Keep non-empty strings
+      }
+      return entity && (entity.entity || entity.entity === ""); // Keep objects with entity property
+    });
 
     // Set defaults and merge config
     const newConfig = {
       ...TodoSwipeCard.getStubConfig(),
       ...config,
-      entities // Override with our sanitized entities array
+      entities // Override with our normalized entities array
     };
 
     // Ensure card_spacing is a valid number
@@ -333,30 +542,6 @@ class TodoSwipeCard extends HTMLElement {
         newConfig.card_spacing = 15;
       }
     }
-
-    // Ensure background_images is an object
-    if (!newConfig.background_images || typeof newConfig.background_images !== 'object') {
-      newConfig.background_images = {};
-    }
-
-    // Ensure display_orders is an object
-    if (!newConfig.display_orders || typeof newConfig.display_orders !== 'object') {
-      newConfig.display_orders = {};
-    }
-
-    // Set default display order for entities that don't have one
-    entities.forEach(entityId => {
-      if (entityId && !newConfig.display_orders[entityId]) {
-        newConfig.display_orders[entityId] = 'none'; // Default to no sorting
-      }
-    });
-
-    // Clean up display_orders for entities that no longer exist
-    Object.keys(newConfig.display_orders).forEach(entityId => {
-      if (!entities.includes(entityId)) {
-        delete newConfig.display_orders[entityId];
-      }
-    });
 
     // Prioritize card_mod if available, then fall back to custom_card_mod
     if (config.card_mod && typeof config.card_mod === 'object') {
@@ -392,7 +577,7 @@ class TodoSwipeCard extends HTMLElement {
       const needsRebuild = this._needsFullRebuild(oldConfig, newConfig);
 
       if (needsRebuild) {
-        // Debounce the rebuild for better performance during rapid config changes
+        // Debounce rebuild to prevent excessive DOM manipulation
         this._configUpdateTimer = setTimeout(() => {
           debugLog("Rebuilding TodoSwipeCard due to significant config change");
           this._build().then(() => {
@@ -422,14 +607,13 @@ class TodoSwipeCard extends HTMLElement {
   
     // Check for changes that require full rebuild
     const entitiesChanged = JSON.stringify(oldConfig.entities) !== JSON.stringify(newConfig.entities);
-    const backgroundImagesChanged = JSON.stringify(oldConfig.background_images) !== JSON.stringify(newConfig.background_images);
-    const displayOrdersChanged = JSON.stringify(oldConfig.display_orders) !== JSON.stringify(newConfig.display_orders); // Add this line
     const paginationChanged = oldConfig.show_pagination !== newConfig.show_pagination;
     const createFieldChanged = oldConfig.show_create !== newConfig.show_create;
     const cardModChanged = JSON.stringify(oldConfig.card_mod) !== JSON.stringify(newConfig.card_mod);
   
-    return entitiesChanged || backgroundImagesChanged || displayOrdersChanged || paginationChanged || createFieldChanged || cardModChanged; // Update this line
+    return entitiesChanged || paginationChanged || createFieldChanged || cardModChanged;
   }
+  
 
   /**
    * Updates specific card features without a full rebuild
@@ -493,7 +677,9 @@ class TodoSwipeCard extends HTMLElement {
       
       // Add delete button if configured to show completed items and menu
       if (this._config.show_completed && this._config.show_completed_menu) {
-        const deleteButton = this._createDeleteButton(card.entityId);
+        // Use the stored entity config from the card object first, then fallback to lookup
+        const entityConfig = card.entityConfig || this._getEntityConfig(card.entityId);
+        const deleteButton = this._createDeleteButton(card.entityId, entityConfig);
         slide.appendChild(deleteButton);
       }
     });
@@ -502,10 +688,11 @@ class TodoSwipeCard extends HTMLElement {
   /**
    * Create a delete button element
    * @param {string} entityId - Entity ID for the todo list
+   * @param {Object} entityConfig - Entity configuration object
    * @returns {HTMLElement} Delete button element
    * @private
    */
-  _createDeleteButton(entityId) {
+  _createDeleteButton(entityId, entityConfig = null) {
     const deleteButton = document.createElement('button');
     deleteButton.className = 'delete-completed-button';
     deleteButton.title = 'Delete completed items';
@@ -514,6 +701,17 @@ class TodoSwipeCard extends HTMLElement {
         <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z" />
       </svg>
     `;
+    
+    // Auto-adjust position if entity has a title
+    if (entityConfig && entityConfig.show_title && entityConfig.title) {
+      // Calculate auto-adjusted position: default 35px + title height (default 40px)
+      const basePosition = 35;
+      const titleHeight = 'var(--todo-swipe-card-title-height, 40px)';
+      const autoAdjustedTop = `calc(${basePosition}px + ${titleHeight})`;
+      
+      // Set the auto-adjustment CSS variable on the button
+      deleteButton.style.setProperty('--todo-swipe-card-delete-button-auto-top', autoAdjustedTop);
+    }
     
     // Apply delete button color if available
     if (this._deleteButtonColor) {
@@ -603,7 +801,7 @@ class TodoSwipeCard extends HTMLElement {
   }
 
   /**
-   * Set the hass object and update all child cards with throttling
+   * Set the hass object and update all child cards
    * @param {Object} hass - Home Assistant object
    */
   set hass(hass) {
@@ -623,23 +821,26 @@ class TodoSwipeCard extends HTMLElement {
       clearTimeout(this._updateThrottle);
     }
     
-    // Throttle updates to prevent flooding
+    // Throttle hass updates to prevent excessive re-renders
     this._updateThrottle = setTimeout(() => {
-      // Check if we should update child cards based on entity changes
+      // More strict check for entity changes
       if (this._shouldUpdateChildCards(hass)) {
         debugLog("Updating child cards due to entity changes");
         
-        // Update child cards in a batch
+        // Update child cards in a batch with additional safety checks
         requestAnimationFrame(() => {
           // Double-check cards still exist after RAF
-          if (!this.cards) return;
+          if (!this.cards || !this._hass) return;
           
-          this.cards.forEach(card => {
+          this.cards.forEach((card, index) => {
             if (card && card.element) {
               try {
-                // Only update if the card element exists and is connected
-                if (card.element.isConnected) {
-                  card.element.hass = hass;
+                // Get the actual card element (might be wrapped)
+                const actualCard = this._getActualCardElement(card.element);
+                
+                // Only update if the card element exists, is connected, and hass actually changed
+                if (actualCard && actualCard.isConnected && actualCard.hass !== hass) {
+                  actualCard.hass = hass;
                 }
               } catch (e) {
                 console.error("Error setting hass on child card:", e);
@@ -650,7 +851,7 @@ class TodoSwipeCard extends HTMLElement {
       }
       
       this._updateThrottle = null;
-    }, 100); // 100ms throttle to batch rapid updates
+    }, 500);
   }
 
   /**
@@ -672,12 +873,12 @@ class TodoSwipeCard extends HTMLElement {
 
   /**
    * Called when the element is disconnected from the DOM
-   * Improved cleanup for better memory management
+   * Improved cleanup for better memory management and to prevent WebSocket flooding
    */
   disconnectedCallback() {
-    debugLog("TodoSwipeCard disconnecting");
+    debugLog("TodoSwipeCard disconnecting - performing cleanup");
     
-    // Clear all timers
+    // Clear all timers first to prevent any pending operations
     if (this._configUpdateTimer) {
       clearTimeout(this._configUpdateTimer);
       this._configUpdateTimer = null;
@@ -688,20 +889,26 @@ class TodoSwipeCard extends HTMLElement {
       this._updateThrottle = null;
     }
     
+    if (this._menuObserverTimeout) {
+      clearTimeout(this._menuObserverTimeout);
+      this._menuObserverTimeout = null;
+    }
+    
     // Clear resize observer
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
     
-    // Clear style cache but don't null it out - it might be accessed during transitions
-    if (this._styleCache) {
-      this._styleCache.clear();
-    }
-    
-    // Clean up menu observers
+    // Clear menu observers with safety check
     if (this._menuObservers) {
-      this._menuObservers.forEach(observer => observer.disconnect());
+      this._menuObservers.forEach(observer => {
+        try {
+          observer.disconnect();
+        } catch (e) {
+          console.warn("Error disconnecting menu observer:", e);
+        }
+      });
       this._menuObservers = [];
     }
     
@@ -720,12 +927,19 @@ class TodoSwipeCard extends HTMLElement {
       window.removeEventListener('mouseup', this._mouseUpHandler);
     }
     
-    // Clean up card elements 
+    // Disconnect child cards from hass to prevent further updates
     if (this.cards) {
       this.cards.forEach(card => {
-        if (card && card.element) {
-          // Don't null out hass during disconnect - it might be needed
-          // card.element.hass = null;
+        if (card?.element) {
+          try {
+            const actualCard = this._getActualCardElement(card.element);
+            if (actualCard) {
+              // Set hass to null to stop further updates
+              actualCard.hass = null;
+            }
+          } catch (e) {
+            console.warn("Error disconnecting child card:", e);
+          }
         }
       });
     }
@@ -733,16 +947,21 @@ class TodoSwipeCard extends HTMLElement {
     // Mark as not initialized but keep critical references
     this.initialized = false;
     
-    // Clear DOM references only
+    // Clear DOM references
     this.cards = [];
     this.cardContainer = null;
     this.sliderElement = null;
     this.paginationElement = null;
     
+    // Reset update tracking
+    this._lastHassUpdate = null;
+    
     // Only clear shadowRoot content if it exists
     if (this.shadowRoot) {
       this.shadowRoot.innerHTML = '';
     }
+    
+    debugLog("TodoSwipeCard cleanup completed");
   }
 
   /**
@@ -968,7 +1187,7 @@ class TodoSwipeCard extends HTMLElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        top: 35px;
+        top: var(--todo-swipe-card-delete-button-top, var(--todo-swipe-card-delete-button-auto-top, 35px));
         padding: 4px;
         background-color: transparent;
         border: none;
@@ -1160,9 +1379,13 @@ class TodoSwipeCard extends HTMLElement {
     }
     
     // Process batches sequentially
+    let currentIndex = 0;
     for (const batch of entityBatches) {
-      await Promise.all(batch.map(async (entityId, batchIndex) => {
-        const i = this._config.entities.indexOf(entityId);
+      const batchStartIndex = currentIndex;
+      await Promise.all(batch.map(async (entityConfig, batchIndex) => {
+        const i = batchStartIndex + batchIndex;
+        const entityId = this._getEntityId(entityConfig);
+        
         if (!entityId || entityId.trim() === "") {
           debugLog("Skipping empty entity at index", i);
           return null;
@@ -1173,18 +1396,22 @@ class TodoSwipeCard extends HTMLElement {
 
         try {
           // Create card element
-          const cardElement = await this._createSingleTodoCard(helpers, entityId);
+          const cardElement = await this._createSingleTodoCard(helpers, entityConfig);
           
           // Pass hass immediately if available
           if (this._hass) {
-            cardElement.hass = this._hass;
+            const actualCard = this._getActualCardElement(cardElement);
+            if (actualCard) {
+              actualCard.hass = this._hass;
+            }
           }
           
           // Store reference to the card
           this.cards[i] = {
             element: cardElement,
             slide: slideDiv,
-            entityId: entityId
+            entityId: entityId,
+            entityConfig: entityConfig
           };
           
           // Add card to slide
@@ -1192,7 +1419,7 @@ class TodoSwipeCard extends HTMLElement {
           
           // Add custom delete button if configured
           if (this._config.show_completed && this._config.show_completed_menu) {
-            const deleteButton = this._createDeleteButton(entityId);
+            const deleteButton = this._createDeleteButton(entityId, entityConfig);
             slideDiv.appendChild(deleteButton);
           }
           
@@ -1200,11 +1427,14 @@ class TodoSwipeCard extends HTMLElement {
           
           // Process menus after a slight delay to ensure DOM is ready
           setTimeout(() => {
-            this._hideMenusInRoot(cardElement.shadowRoot);
+            const actualCard = this._getActualCardElement(cardElement);
+            if (actualCard && actualCard.shadowRoot) {
+              this._hideMenusInRoot(actualCard.shadowRoot);
+            }
           }, 50);
           
           // Setup input field enhancements
-          this._enhanceInputField(cardElement);
+          this._enhanceInputField(this._getActualCardElement(cardElement));
           
         } catch (e) {
           console.error(`Error creating card ${i}:`, entityId, e);
@@ -1216,6 +1446,7 @@ class TodoSwipeCard extends HTMLElement {
           this.cards[i] = { error: true, slide: slideDiv };
         }
       }));
+      currentIndex += batch.length;
     }
     
     // Filter out any potential gaps if errors occurred
@@ -1225,15 +1456,16 @@ class TodoSwipeCard extends HTMLElement {
   /**
    * Create a single todo card
    * @param {Object} helpers - Card helpers
-   * @param {string} entityId - Entity ID
+   * @param {string|Object} entityConfig - Entity configuration (string or object)
    * @returns {Promise<HTMLElement>} Card element
    * @private
    */
-  async _createSingleTodoCard(helpers, entityId) {
+  async _createSingleTodoCard(helpers, entityConfig) {
+    const entityId = this._getEntityId(entityConfig);
     debugLog("Creating card for entity:", entityId);
     
     // Generate internal styles for this card
-    const internalStyles = this._generateInternalStyles(entityId);
+    const internalStyles = this._generateInternalStyles(entityConfig);
     
     // Get custom card mod styling from config
     const customCardModStyle = this._config.card_mod || this._config.custom_card_mod || {};
@@ -1242,9 +1474,7 @@ class TodoSwipeCard extends HTMLElement {
     const mergedCardModStyle = this._mergeCardModStyles(internalStyles, customCardModStyle);
     
     // Get display order for this entity
-    const displayOrder = this._config.display_orders && this._config.display_orders[entityId] 
-      ? this._config.display_orders[entityId] 
-      : 'none';
+    const displayOrder = (typeof entityConfig === 'object' && entityConfig.display_order) || 'none';
     
     // Create the todo-list card with merged card-mod styling and display order
     const cardConfig = {
@@ -1252,26 +1482,128 @@ class TodoSwipeCard extends HTMLElement {
       entity: entityId,
       hide_create: !this._config.show_create,
       hide_completed: !this._config.show_completed,
-      display_order: displayOrder, // Add this line
+      display_order: displayOrder,
       card_mod: {
         style: mergedCardModStyle
       }
     };
     
-    return await helpers.createCardElement(cardConfig);
+    const cardElement = await helpers.createCardElement(cardConfig);
+
+    // Check if title should be shown
+    const showTitle = (typeof entityConfig === 'object' && entityConfig.show_title) || false;
+    const titleText = (typeof entityConfig === 'object' && entityConfig.title) || '';
+    
+    let finalElement = cardElement;
+    
+    // If title is enabled and has text, create wrapper
+    if (showTitle && titleText) {
+      finalElement = this._createCardWithTitle(cardElement, titleText);
+    }
+    
+    return finalElement;
+  }
+
+  /**
+   * Create a wrapper around the card with title
+   * This replaces the old _addTitleToCard method
+   * @param {HTMLElement} cardElement - The card element
+   * @param {string} titleText - The title text
+   * @returns {HTMLElement} Wrapper element containing title and card
+   * @private
+   */
+  _createCardWithTitle(cardElement, titleText) {
+    // Create wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'todo-card-with-title-wrapper';
+    wrapper.style.cssText = `
+      position: relative;
+      height: 100%;
+      width: 100%;
+      border-radius: var(--ha-card-border-radius, 12px);
+      overflow: hidden;
+      background: var(--ha-card-background, var(--card-background-color, white));
+      display: flex;
+      flex-direction: column;
+    `;
+    
+    // Create title
+    const titleElement = document.createElement('div');
+    titleElement.className = 'todo-swipe-card-external-title';
+    titleElement.textContent = titleText;
+    titleElement.style.cssText = `
+      height: var(--todo-swipe-card-title-height, 40px);
+      display: flex;
+      align-items: center;
+      justify-content: var(--todo-swipe-card-title-justify, center);
+      background: var(--todo-swipe-card-title-background, var(--secondary-background-color, #f7f7f7));
+      color: var(--todo-swipe-card-title-color, var(--primary-text-color));
+      font-size: var(--todo-swipe-card-title-font-size, 16px);
+      font-weight: var(--todo-swipe-card-title-font-weight, 500);
+      border-bottom: var(--todo-swipe-card-title-border-width, 1px) solid var(--todo-swipe-card-title-border-color, rgba(0,0,0,0.12));
+      padding: 0 var(--todo-swipe-card-title-padding-horizontal, 16px);
+      box-sizing: border-box;
+      text-align: var(--todo-swipe-card-title-text-align, center);
+      flex-shrink: 0;
+      z-index: 1;
+      border-radius: var(--ha-card-border-radius, 12px) var(--ha-card-border-radius, 12px) 0 0;
+      margin: 0;
+      line-height: 1;
+      font-family: inherit;
+      white-space: var(--todo-swipe-card-title-white-space, nowrap);
+      overflow: var(--todo-swipe-card-title-overflow, hidden);
+      text-overflow: var(--todo-swipe-card-title-text-overflow, clip);
+    `;
+    
+    // Create card container
+    const cardContainer = document.createElement('div');
+    cardContainer.style.cssText = `
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      position: relative;
+    `;
+    
+    // Ensure the card takes full height and remove top border radius
+    cardElement.style.height = '100%';
+    cardElement.style.minHeight = '0';
+    cardElement.style.borderRadius = '0 0 var(--ha-card-border-radius, 12px) var(--ha-card-border-radius, 12px)';
+    cardElement.style.borderTopLeftRadius = '0';
+    cardElement.style.borderTopRightRadius = '0';
+
+    // Also target the ha-card inside if it exists
+    setTimeout(() => {
+      const haCard = cardElement.shadowRoot?.querySelector('ha-card');
+      if (haCard) {
+        haCard.style.borderRadius = '0 0 var(--ha-card-border-radius, 12px) var(--ha-card-border-radius, 12px)';
+        haCard.style.borderTopLeftRadius = '0';
+        haCard.style.borderTopRightRadius = '0';
+      }
+    }, 0);
+    
+    // Assemble
+    wrapper.appendChild(titleElement);
+    cardContainer.appendChild(cardElement);
+    wrapper.appendChild(cardContainer);
+    
+    return wrapper;
   }
 
   /**
    * Generate internal styles for a todo card
-   * Fixed version that maintains original visual appearance
-   * @param {string} entityId - Entity ID
+   * Updated to include automatic due date icon scaling and new CSS variable names
+   * @param {string|Object} entityConfig - Entity configuration (string or object)
    * @returns {Object} Internal card mod styles
    * @private
    */
-  _generateInternalStyles(entityId) {
+  _generateInternalStyles(entityConfig) {
+    const entityId = this._getEntityId(entityConfig);
+    
     // Get background image if configured
-    const backgroundImages = this._config.background_images || {};
-    const backgroundImage = backgroundImages[entityId] || null;
+    let backgroundImage = null;
+    if (typeof entityConfig === 'object' && entityConfig.background_image) {
+      backgroundImage = entityConfig.background_image;
+    }
     
     // Determine if Add button should be shown
     const showAddButton = this._config.show_addbutton !== undefined ? 
@@ -1291,9 +1623,9 @@ class TodoSwipeCard extends HTMLElement {
           /* Input styling with text cutoff before add button */
           .mdc-text-field__input {
             color: ${textColor} !important;
-            max-width: calc(100% - 13px) !important; /* Reserve space for add button plus 5px margin */
-            padding-right: 10px !important; /* Ensure adequate spacing from add button */
-            margin-left: -4px !important; /* Fine-tune alignment with checkboxes */
+            max-width: calc(100% - 13px) !important;
+            padding-right: 10px !important;
+            margin-left: -4px !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
             box-sizing: border-box !important;
@@ -1303,7 +1635,7 @@ class TodoSwipeCard extends HTMLElement {
           .mdc-text-field {
             --mdc-text-field-fill-color: transparent;
             height: auto !important;
-            --text-field-padding: 0px 13px 5px 5px; /* Adjust right padding for add button space */
+            --text-field-padding: 0px 13px 5px 5px;
             position: relative !important;
           }
           
@@ -1313,13 +1645,13 @@ class TodoSwipeCard extends HTMLElement {
             height: auto !important;
             --text-field-padding: 0px 0px 5px 5px;
           }
-
+  
           /* Remove underline */
           .mdc-line-ripple::before,
           .mdc-line-ripple::after {
             border-bottom-style: none !important;
           }
-
+  
           /* Placeholder text styling with CSS variable control */
           .mdc-text-field__input::placeholder {
             color: var(--todo-swipe-card-placeholder-color, ${textColor}) !important;
@@ -1344,9 +1676,8 @@ class TodoSwipeCard extends HTMLElement {
         `
       },
       '.': `
-
         ha-card {
-          --mdc-typography-subtitle1-font-size: var(--todo-swipe-card-typography-size, 11px);
+          --mdc-typography-subtitle1-font-size: var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px));
           box-shadow: none;
           height: 100% !important;
           width: 100%;
@@ -1367,9 +1698,7 @@ class TodoSwipeCard extends HTMLElement {
         }
 
         /* Apply consistent color to text elements but no forced opacity */
-        ha-card *,
         ha-check-list-item,
-        ha-check-list-item *,
         .mdc-list-item__text,
         .mdc-list-item__primary-text {
           color: ${textColor} !important;
@@ -1466,11 +1795,17 @@ class TodoSwipeCard extends HTMLElement {
           fill: ${addButtonColor} !important;
         }`}
 
-        /* Hide all headers and menus */
+        /* Hide all headers and menus and fix margin inconsistency */
         ha-card.type-todo-list div.header h2,
         ha-card.type-todo-list div.header ha-button-menu,
         ha-button-menu {
           display: none !important;
+        }
+
+        /* Fix header margin inconsistency across all cards */
+        ha-card.type-todo-list div.header {
+          margin-top: 0 !important;
+          margin-bottom: 0 !important;
         }
 
         /* Hide separator and completed header */
@@ -1492,18 +1827,25 @@ class TodoSwipeCard extends HTMLElement {
           min-height: var(--todo-swipe-card-item-height, 0px) !important;
           --mdc-list-item-graphic-margin: var(--todo-swipe-card-item-margin, 5px) !important;
           color: ${textColor} !important;
-          padding-right: 40px !important; /* Reserve space for delete button plus 5px margin */
-          align-items: flex-start !important; /* Align checkbox to top */
+          padding-right: 40px !important;
+          align-items: flex-start !important;
+          margin-top: var(--todo-swipe-card-item-spacing, 0px) !important;
+        }
+
+        /* Remove margin from first item - more specific selector */
+        ha-card.type-todo-list ha-check-list-item:first-child,
+        ha-check-list-item:first-of-type {
+          margin-top: 0 !important;
         }
 
         /* Enable text wrapping for text content containers */
         ha-check-list-item .mdc-list-item__text {
-          max-width: calc(100% - 70px) !important; /* Account for checkbox (30px) + delete button (40px) + spacing */
+          max-width: calc(100% - 70px) !important;
           overflow: visible !important;
           text-overflow: clip !important;
           white-space: normal !important;
           color: ${textColor} !important;
-          line-height: 1.4 !important;
+          line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
 
         /* Ensure primary text wraps properly */
@@ -1513,7 +1855,7 @@ class TodoSwipeCard extends HTMLElement {
           text-overflow: clip !important;
           white-space: normal !important;
           color: ${textColor} !important;
-          line-height: 1.4 !important;
+          line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
 
         /* Apply text wrapping at the item level to override Material Design defaults */
@@ -1523,14 +1865,15 @@ class TodoSwipeCard extends HTMLElement {
           white-space: normal !important;
           word-wrap: break-word !important;
           overflow-wrap: break-word !important;
+          line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
 
         /* Ensure checkbox graphic stays at top when text wraps */
         ha-check-list-item .mdc-list-item__graphic {
           align-self: flex-start !important;
-          margin-top: 2px !important; /* Small offset to align with first line of text */
+          margin-top: 2px !important;
         }
-   
+
         /* Special handling for multiline items (with due dates) */
         ha-check-list-item.multiline {
           align-items: flex-start !important;
@@ -1541,6 +1884,7 @@ class TodoSwipeCard extends HTMLElement {
           white-space: normal !important;
           overflow: visible !important;
           text-overflow: clip !important;
+          line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
         
         /* Target the .column div (which contains summary and due date) inside a multiline item */
@@ -1552,18 +1896,67 @@ class TodoSwipeCard extends HTMLElement {
         /* Allow text within the summary and due date lines themselves to wrap if it's very long */
         ha-check-list-item.multiline .summary,
         ha-check-list-item.multiline .due {
-          white-space: normal !important; /* Allow text to wrap */
+          white-space: normal !important;
         }
 
-        /* Custom font size for due date text */
+        /* Description styling with customizable color */
+        .description,
+        ha-markdown-element.description,
+        ha-check-list-item .description,
+        ha-check-list-item ha-markdown-element.description {
+          color: var(--todo-swipe-card-font-color-description, var(--secondary-text-color)) !important;
+          font-size: var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)) !important;
+          margin-top: var(--todo-swipe-card-description-margin-top, 2px) !important;
+          line-height: var(--todo-swipe-card-line-height, 1.4) !important;
+        }
+
+        /* Due date styling with customizable colors and font size */
+        .due,
+        ha-check-list-item .due,
         ha-check-list-item.multiline .due {
-          font-size: var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-typography-size, 11px)) !important;
+          color: var(--todo-swipe-card-font-color-due-date, var(--secondary-text-color)) !important;
+          font-size: var(--todo-swipe-card-font-size-due-date, var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)))) !important;
+          margin-top: var(--todo-swipe-card-due-date-margin-top, 4px) !important;
+          line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
 
-        /* Apply custom font size to secondary text (where due date appears) */
+        /* Overdue due date styling with customizable color */
+        .due.overdue,
+        ha-check-list-item .due.overdue,
+        ha-check-list-item.multiline .due.overdue {
+          color: var(--todo-swipe-card-font-color-due-date-overdue, var(--warning-color)) !important;
+        }
+
+        /* Completed items with overdue dates revert to normal due date color */
+        ha-check-list-item.completed .due.overdue {
+          color: var(--todo-swipe-card-font-color-due-date, var(--secondary-text-color)) !important;
+        }
+
+        /* Apply custom font size to secondary text (where due date appears) with new variable names and backward compatibility */
         ha-check-list-item .mdc-list-item__secondary-text,
         ha-check-list-item .mdc-deprecated-list-item__secondary-text {
-          font-size: var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-typography-size, 11px)) !important;
+          font-size: var(--todo-swipe-card-font-size-due-date, var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)))) !important;
+        }
+
+        /* Due date icon scaling - automatically matches text size with new variable names and backward compatibility */
+        .due ha-svg-icon,
+        ha-check-list-item .due ha-svg-icon,
+        ha-check-list-item.multiline .due ha-svg-icon {
+          --mdc-icon-size: calc(var(--todo-swipe-card-font-size-due-date, var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)))) * 1.2) !important;
+          width: calc(var(--todo-swipe-card-font-size-due-date, var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)))) * 1.2) !important;
+          height: calc(var(--todo-swipe-card-font-size-due-date, var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)))) * 1.2) !important;
+          margin-right: 0 !important;
+          margin-inline-end: 0 !important;
+          margin-inline-start: initial !important;
+        }
+
+        /* Ensure proper alignment of due date content with icons */
+        ha-check-list-item.multiline .due,
+        ha-check-list-item .mdc-list-item__secondary-text,
+        ha-check-list-item .mdc-deprecated-list-item__secondary-text {
+          display: flex !important;
+          align-items: center !important;
+          gap: 4px !important;
         }
 
         /* Content area constraint */
@@ -1717,7 +2110,7 @@ class TodoSwipeCard extends HTMLElement {
 
   /**
    * Set up optimized menu button observers
-   * Uses a single observer with better performance
+   * Uses a single observer with better performance and longer debouncing
    * @private
    */
   _setupMenuButtonObservers() {
@@ -1731,25 +2124,35 @@ class TodoSwipeCard extends HTMLElement {
     
     // Single observer with increased debounce time
     const observer = new MutationObserver(() => {
-      // Use longer debounce for better performance
+      // Increased debounce from 250ms to 1000ms to prevent flooding
       if (this._menuObserverTimeout) clearTimeout(this._menuObserverTimeout);
       this._menuObserverTimeout = setTimeout(() => {
+        // Only process if we're still connected and initialized
+        if (!this.initialized || !this.shadowRoot) return;
+        
         this.cards.forEach(card => {
           if (card?.element?.shadowRoot) {
             this._hideMenusInRoot(card.element.shadowRoot);
           }
         });
-      }, 250); // Increased from 100ms
+      }, 1000);
     });
     
-    // Observe only necessary elements
+    // Observe only necessary elements with reduced scope
     this.cards.forEach(card => {
-      if (card?.element?.shadowRoot) {
-        this._hideMenusInRoot(card.element.shadowRoot);
-        observer.observe(card.element.shadowRoot, {
-          childList: true,
-          subtree: false // Reduced scope
-        });
+      if (card?.element) {
+        // Get the actual card element (might be wrapped)
+        const actualCard = this._getActualCardElement(card.element);
+        
+        if (actualCard && actualCard.shadowRoot) {
+          this._hideMenusInRoot(actualCard.shadowRoot);
+          observer.observe(actualCard.shadowRoot, {
+            childList: true,
+            subtree: false, // Reduced scope - only direct children
+            attributes: false, // Don't observe attribute changes
+            characterData: false // Don't observe text changes
+          });
+        }
       }
     });
     
@@ -1758,22 +2161,22 @@ class TodoSwipeCard extends HTMLElement {
 
   /**
    * Hide menu buttons in a DOM tree
-   * Optimized version with depth limiting
+   * Hide menu buttons with performance optimizations
    * @param {ShadowRoot|Element} root - Root element to process
    * @param {number} depth - Current recursion depth
    * @private
    */
   _hideMenusInRoot(root, depth = 0) {
-    if (!root || depth > 3) return; // Limit recursion depth
+    if (!root || depth > 2) return; // Reduced depth limit from 3 to 2
     
     try {
       // Find all menu buttons in this root
       const menus = root.querySelectorAll ? root.querySelectorAll('ha-button-menu') : [];
       if (menus.length > 0) {
-        // Batch style updates
+        // Batch style updates and only update if not already hidden
         requestAnimationFrame(() => {
           menus.forEach(menu => {
-            if (menu && menu.parentNode && menu.style) {
+            if (menu && menu.parentNode && menu.style && menu.style.display !== 'none') {
               // Apply all styles at once
               menu.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; position: absolute !important;';
               
@@ -1787,13 +2190,13 @@ class TodoSwipeCard extends HTMLElement {
         });
       }
       
-      // Check children with shadow roots (limited)
-      if (root.querySelectorAll && depth < 3) {
+      // Reduced recursive checking with stricter limits
+      if (root.querySelectorAll && depth < 2) { // Reduced depth
         const shadowElements = root.querySelectorAll('*');
         let count = 0;
         
         for (const el of shadowElements) {
-          if (count > 20) break; // Reduced limit for better performance
+          if (count > 10) break; // Reduced limit from 20 to 10
           if (el && el.shadowRoot) {
             this._hideMenusInRoot(el.shadowRoot, depth + 1);
             count++;
@@ -1807,7 +2210,7 @@ class TodoSwipeCard extends HTMLElement {
 
   /**
    * Add swipe gesture handling with optimizations
-   * FIXED VERSION - Comprehensive event handling approach
+   * Handle swipe gestures with touch and mouse support
    * @private
    */
   _addSwiperGesture() {
@@ -1891,7 +2294,6 @@ class TodoSwipeCard extends HTMLElement {
       return false;
     };
 
-    // --- Define handlers as bound instance methods ---
     this._handleSwipeStart = (e) => {
       // Ignore if already dragging or non-primary button
       if (isDragging || (e.type === 'mousedown' && e.button !== 0)) return;
@@ -2149,7 +2551,7 @@ class TodoSwipeCard extends HTMLElement {
 }
 
 /**
- * Card editor for TodoSwipeCard
+ * Updated TodoSwipeCardEditor with compact layout similar to simple-swipe-card
  */
 class TodoSwipeCardEditor extends LitElement {
 
@@ -2165,32 +2567,74 @@ class TodoSwipeCardEditor extends LitElement {
     return {
       hass: { type: Object },
       _config: { type: Object },
+      _expandedEntities: { type: Set, state: true }, // Track which entities are expanded
+      _buttonFeedbackState: { type: String, state: true }, // Track button feedback state
     };
   }
+
+  constructor() {
+    super();
+    this._expandedEntities = new Set();
+    this._buttonFeedbackState = 'normal'; // Can be 'normal', 'blocked', or 'success'
+    this._showMigrationWarning = false; // Track migration warning visibility
+    this._legacyConfig = null; // Store legacy config detection result
+    
+    // Bind the method to ensure proper context
+    this._addEntity = this._addEntity.bind(this);
+  }
   
-  connectedCallback() {
+  async connectedCallback() {
     super.connectedCallback();
+    await this._ensureComponentsLoaded();
+    this.requestUpdate();
+  }
+  
+  async _ensureComponentsLoaded() {
+    const maxAttempts = 50;
+    let attempts = 0;
     
-    // Force render update when the editor is connected to the DOM
-    debugLog("TodoSwipeCardEditor - Connected to DOM");
+    while (!customElements.get("ha-entity-picker") && attempts < maxAttempts) {
+      await this._loadCustomElements();
+      if (!customElements.get("ha-entity-picker")) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+    }
     
-    // Use a delayed update to avoid multiple reflows
-    if (!this._initialUpdateDone) {
-      this._initialUpdateDone = true;
-      requestAnimationFrame(() => {
-        this.requestUpdate();
-      });
+    if (!customElements.get("ha-entity-picker")) {
+      console.error("Failed to load ha-entity-picker after multiple attempts");
+    }
+  }
+
+  async _loadCustomElements() {
+    if (!customElements.get("ha-entity-picker")) {
+      try {
+        const attempts = [
+          () => customElements.get("hui-entities-card")?.getConfigElement?.(),
+          () => customElements.get("hui-entity-picker-card")?.getConfigElement?.(),
+        ];
+
+        for (const attempt of attempts) {
+          try {
+            await attempt();
+            if (customElements.get("ha-entity-picker")) {
+              break;
+            }
+          } catch (e) {
+            console.debug("Entity picker load attempt failed:", e);
+          }
+        }
+      } catch (e) {
+        console.warn("Could not load ha-entity-picker", e);
+      }
     }
   }
 
   updated(changedProperties) {
     super.updated(changedProperties);
     
-    // Only update entities if configuration has changed, with debounce
     if (changedProperties.has('_config') && this._config) {
-      // Only check for entity pickers if really needed
       if (this._config.entities && this._config.entities.length > 0) {
-        // Batch DOM checks with requestAnimationFrame for better performance
         if (this._updateRAF) {
           cancelAnimationFrame(this._updateRAF);
         }
@@ -2204,20 +2648,173 @@ class TodoSwipeCardEditor extends LitElement {
         });
       }
     }
+  }
+
+  /**
+   * Detect legacy configuration format in editor
+   * @param {Object} config - Configuration to check
+   * @returns {Object} Detection result with isLegacy flag and found properties
+   * @private
+   */
+  _detectLegacyConfig(config) {
+    const legacyProperties = [
+      'background_images',
+      'display_orders', 
+      'entity_titles',
+      'show_titles'
+    ];
     
+    const foundLegacyProps = legacyProperties.filter(prop => 
+      config.hasOwnProperty(prop) && config[prop] && Object.keys(config[prop]).length > 0
+    );
+    
+    return {
+      isLegacy: foundLegacyProps.length > 0,
+      legacyProperties: foundLegacyProps
+    };
+  }
+
+  /**
+   * Migrate legacy config to new entity-centric format
+   * @param {Object} oldConfig - Legacy configuration
+   * @returns {Object} Migrated configuration
+   * @private
+   */
+  _migrateLegacyConfig(oldConfig) {
+    // Convert entities to new format
+    let migratedEntities = [];
+    if (oldConfig.entities && Array.isArray(oldConfig.entities)) {
+      migratedEntities = oldConfig.entities.map(entity => {
+        if (typeof entity === 'string') {
+          const entityConfig = { entity };
+          
+          // Migrate background image
+          if (oldConfig.background_images && oldConfig.background_images[entity]) {
+            entityConfig.background_image = oldConfig.background_images[entity];
+          }
+          
+          // Migrate display order
+          if (oldConfig.display_orders && oldConfig.display_orders[entity]) {
+            entityConfig.display_order = oldConfig.display_orders[entity];
+          }
+          
+          // Migrate show title
+          if (oldConfig.show_titles && oldConfig.show_titles[entity]) {
+            entityConfig.show_title = oldConfig.show_titles[entity];
+          }
+          
+          // Migrate entity title
+          if (oldConfig.entity_titles && oldConfig.entity_titles[entity]) {
+            entityConfig.title = oldConfig.entity_titles[entity];
+          }
+          
+          return entityConfig;
+        }
+        return entity; // Already in new format
+      });
+    }
+    
+    // Start with all properties from old config
+    const newConfig = { ...oldConfig };
+    
+    // Remove legacy properties
+    delete newConfig.background_images;
+    delete newConfig.display_orders;
+    delete newConfig.entity_titles;
+    delete newConfig.show_titles;
+    delete newConfig.custom_card_mod;
+    
+    // Update entities with migrated format
+    newConfig.entities = migratedEntities;
+    
+    // Rebuild config in desired order with type first, preserving all other properties
+    const orderedConfig = {
+      type: newConfig.type,
+      entities: newConfig.entities,
+      ...Object.fromEntries(
+        Object.entries(newConfig).filter(([key]) => key !== 'type' && key !== 'entities')
+      )
+    };
+    
+    return orderedConfig;
+  }
+
+  /**
+   * Handle auto-migration button click
+   * @private
+   */
+  _handleAutoMigrate() {
+    if (!this._legacyConfig || !this._legacyConfig.isLegacy) return;
+    
+    const migratedConfig = this._migrateLegacyConfig(this._config);
+    this._config = migratedConfig;
+    this._showMigrationWarning = false;
+    this._legacyConfig = null;
+    
+    // Dispatch the migrated config
+    this.dispatchEvent(new CustomEvent('config-changed', { 
+      detail: { config: migratedConfig },
+      bubbles: true,
+      composed: true
+    }));
+    
+    this.requestUpdate();
+  }
+
+  /**
+   * Helper to get entity ID from entity configuration
+   * @param {string|Object} entity - Entity configuration
+   * @returns {string} Entity ID
+   * @private
+   */
+  _getEntityId(entity) {
+    if (typeof entity === 'string') {
+      return entity;
+    }
+    return entity?.entity || '';
+  }
+
+  /**
+   * Create config with proper property order
+   * @param {Object} config - Configuration object
+   * @returns {Object} Reordered configuration
+   * @private
+   */
+  _createOrderedConfig(config) {
+    const orderedConfig = {
+      type: config.type,
+      entities: config.entities,
+      card_spacing: config.card_spacing,
+      show_pagination: config.show_pagination,
+      show_create: config.show_create,
+      show_addbutton: config.show_addbutton,
+      show_completed: config.show_completed,
+      show_completed_menu: config.show_completed_menu,
+      delete_confirmation: config.delete_confirmation,
+      ...Object.fromEntries(
+        Object.entries(config).filter(([key]) => ![
+          'type', 'entities', 'card_spacing', 'show_pagination', 
+          'show_create', 'show_addbutton', 'show_completed', 
+          'show_completed_menu', 'delete_confirmation'
+        ].includes(key))
+      )
+    };
+    
+    return orderedConfig;
   }
 
   setConfig(config) {
     debugLog("Editor setConfig called with:", JSON.stringify(config));
     
-    // Start with the stub config for defaults
+    // Detect legacy configuration
+    this._legacyConfig = this._detectLegacyConfig(config);
+    this._showMigrationWarning = this._legacyConfig.isLegacy;
+    
     this._config = {
       ...TodoSwipeCard.getStubConfig()
     };
     
-    // Then apply the provided config
     if (config) {
-      // Handle entities specially to ensure it's always an array
       let entities = config.entities || [];
       if (!Array.isArray(entities)) {
         if (typeof entities === 'object') {
@@ -2229,13 +2826,39 @@ class TodoSwipeCardEditor extends LitElement {
         }
       }
       
-      // Filter out empty entries
-      entities = entities.filter(e => e && e.trim() !== "");
+      // Normalize entities to support both string and object formats
+      entities = entities.map(entity => {
+        if (typeof entity === 'string') {
+          // Keep string format during editing for backward compatibility
+          return entity;
+        }
+        return entity; // Already object format
+      });
       
-      // Ensure card_spacing is a valid number
+      // Only filter out empty entities if they're not at the end of the array
+      // This allows newly added empty entities to persist for user configuration
+      const hasTrailingEmpty = entities.length > 0 && entities[entities.length - 1] === "";
+      if (!hasTrailingEmpty) {
+        entities = entities.filter(e => {
+          if (typeof e === 'string') {
+            return e && e.trim() !== "";
+          }
+          return e && e.entity && e.entity.trim() !== "";
+        });
+      } else {
+        // Filter out empty entities except the last one
+        const nonEmptyEntities = entities.slice(0, -1).filter(e => {
+          if (typeof e === 'string') {
+            return e && e.trim() !== "";
+          }
+          return e && e.entity && e.entity.trim() !== "";
+        });
+        entities = [...nonEmptyEntities, ""];
+      }
+      
       let cardSpacing = config.card_spacing;
       if (cardSpacing === undefined) {
-        cardSpacing = 15; // Default spacing
+        cardSpacing = 15;
       } else {
         cardSpacing = parseInt(cardSpacing);
         if (isNaN(cardSpacing) || cardSpacing < 0) {
@@ -2243,40 +2866,25 @@ class TodoSwipeCardEditor extends LitElement {
         }
       }
       
-      // Ensure custom_card_mod is an object
       let customCardMod = config.custom_card_mod;
       if (!customCardMod || typeof customCardMod !== 'object') {
         customCardMod = {};
       }
-      
-      // Ensure display_orders is an object
-      let displayOrders = config.display_orders;
-      if (!displayOrders || typeof displayOrders !== 'object') {
-        displayOrders = {};
-      }
 
-      // Merge config, overriding stub with provided values plus our cleaned entities and spacing
       this._config = {
         ...this._config,
         ...config,
         entities,
         card_spacing: cardSpacing,
-        custom_card_mod: customCardMod,
-        display_orders: displayOrders
+        custom_card_mod: customCardMod
       };
     }
     
-    // Ensure background_images is an object
-    if (!this._config.background_images || typeof this._config.background_images !== 'object') {
-      this._config.background_images = {};
-    }
-    
     debugLog("TodoSwipeCardEditor - Config after initialization:", JSON.stringify(this._config));
-    
-    // Force a render update to ensure entities display correctly
     this.requestUpdate();
   }
 
+  // Getters remain the same
   get _show_pagination() {
     return this._config.show_pagination !== false;
   }
@@ -2305,27 +2913,29 @@ class TodoSwipeCardEditor extends LitElement {
     return this._config.card_spacing !== undefined ? this._config.card_spacing : 15;
   }
 
-  // Get a list of valid entities (not empty strings)
   get _validEntities() {
-    return (this._config.entities || []).filter(entity => entity && entity.trim() !== "");
+    return (this._config.entities || []).filter(entity => {
+      const entityId = this._getEntityId(entity);
+      return entityId && entityId.trim() !== "";
+    });
   }
 
-  // Check if we should show the background images section
   get _showBackgroundImagesSection() {
-    return this._validEntities.length > 0;
+    return this._validEntities.length > 0 && this._legacyConfig && this._legacyConfig.isLegacy;
   }
 
-  // Check if we should show the completed menu option
   get _showCompletedMenuOption() {
     return this._show_completed;
   }
   
-  // Check if we should show the delete confirmation option
   get _showDeleteConfirmationOption() {
     return this._show_completed && this._show_completed_menu;
   }
+  
+  get _showTitleSection() {
+    return this._validEntities.length > 0;
+  }
 
-  // This static method ensures the editor UI refreshes properly when reopened
   static get styles() {
     return css`
       ha-switch {
@@ -2339,21 +2949,217 @@ class TodoSwipeCardEditor extends LitElement {
         flex: 1;
         padding-right: 8px;
       }
-      .entity-row {
+      
+      /* Card row styles similar to simple-swipe-card */
+      .card-list {
+        margin-top: 8px;
+        margin-bottom: 16px;
+      }
+
+      .card-row {
         display: flex;
         align-items: center;
+        padding: 8px;
+        border: 1px solid var(--divider-color);
+        border-radius: var(--ha-card-border-radius, 4px);
         margin-bottom: 8px;
-        width: 100%;
+        background: var(--secondary-background-color);
       }
-      .entity-row ha-entity-picker {
+
+      .card-info {
         flex-grow: 1;
+        display: flex;
+        align-items: center;
         margin-right: 8px;
+        overflow: hidden;
       }
-      .entity-row ha-icon-button {
+
+      .card-index {
+        font-weight: bold;
+        margin-right: 10px; /* Back to original spacing since expand button is now separate */
+        color: var(--secondary-text-color);
         flex-shrink: 0;
-        width: 40px;
-        height: 40px;
       }
+
+      .card-type {
+        font-size: 14px;
+        color: var(--primary-text-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .card-name {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        margin-left: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .card-actions {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
+      .card-actions ha-icon-button {
+        --mdc-icon-button-size: 36px;
+        color: var(--secondary-text-color);
+      }
+
+      .card-actions ha-icon-button:hover {
+        color: var(--primary-text-color);
+      }
+
+      .no-cards {
+        text-align: center;
+        color: var(--secondary-text-color);
+        padding: 16px;
+        border: 1px dashed var(--divider-color);
+        border-radius: var(--ha-card-border-radius, 4px);
+        margin-bottom: 16px;
+      }
+
+      /* Updated expand button styles for left positioning */
+      .expand-button {
+        --mdc-icon-button-size: 32px;
+        color: var(--secondary-text-color);
+        margin: 0 8px 0 0; /* Right margin to separate from number */
+        flex-shrink: 0;
+        order: -1; /* Ensure it's always first */
+        transition: color 0.2s ease, transform 0.2s ease;
+      }
+
+      .expand-button:hover {
+        color: #ffc107; /* Amber color on hover */
+        background-color: rgba(255, 193, 7, 0.1);
+      }
+
+      /* Visual feedback for expanded state - amber color */
+      .expand-button[aria-label*="Collapse"] {
+        color: #ffc107; /* Amber color when expanded */
+      }
+
+      /* Optional: Enhanced hover effect for entire row */
+      .card-row:hover .expand-button {
+        color: #ffc107; /* Amber color when row is hovered */
+      }
+
+      .clickable-row {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+      }
+
+      .clickable-row:hover {
+        background: rgba(255, 193, 7, 0.1); /* Light amber background */
+        border-color: rgba(255, 193, 7, 0.56); /* Semi-transparent amber border */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Amber left border indicator on hover */
+      .clickable-row:hover::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: #ffc107; /* Amber left border */
+        border-radius: 0 2px 2px 0;
+      }
+
+      /* Enhanced visual feedback for expanded rows - SAME amber colors */
+      .clickable-row.expanded {
+        border-color: rgba(255, 193, 7, 0.56); /* Same amber border as hover */
+        background: rgba(255, 193, 7, 0.1); /* Same amber background as hover */
+      }
+
+      .clickable-row.expanded::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: #ffc107; /* Amber left border when expanded */
+        border-radius: 0 2px 2px 0;
+      }
+
+      /* Ensure buttons maintain their cursor */
+      .clickable-row .card-actions {
+        cursor: default; /* Reset cursor for button area */
+      }
+
+      .clickable-row .card-actions ha-icon-button {
+        cursor: pointer; /* Ensure buttons still show pointer cursor */
+      }
+
+      .clickable-row:focus {
+        outline: none; /* Remove default browser outline */
+        border-color: rgba(255, 193, 7, 0.56); /* Same amber border as expanded */
+        background: rgba(255, 193, 7, 0.1); /* Same amber background as expanded */
+      }
+
+      /* Visual hint that the row is interactive */
+      .clickable-row .card-info {
+        user-select: none; /* Prevent text selection on click */
+      }
+
+      /* Optional: Add a subtle animation for expand button when row is hovered */
+      .clickable-row:hover .expand-button {
+        color: #ffc107; /* Amber expand button on hover */
+        transform: scale(1.05);
+      }
+
+      /* UPDATED: Expanded content styles with consistent width */
+      .expanded-content {
+        margin-top: 8px;
+        margin-bottom: 8px;
+        padding: 12px;
+        background: var(--secondary-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: var(--ha-card-border-radius, 4px);
+      }
+
+      /* Ensure all form elements have consistent width */
+      .expanded-content ha-entity-picker {
+        width: 100% !important;
+        margin-bottom: 12px !important;
+        box-sizing: border-box !important;
+      }
+
+      .expanded-content ha-select {
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Target all textfields in expanded content */
+      .expanded-content ha-textfield {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Make sure the toggle option container doesn't interfere */
+      .expanded-content .toggle-option {
+        margin: 8px 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Ensure the title textfield inside toggle-option takes full width */
+      .expanded-content .toggle-option ha-textfield {
+        width: 100% !important;
+        margin: 8px 0 0 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+      }
+      
       .section-header {
         margin-top: 24px;
         margin-bottom: 16px;
@@ -2363,35 +3169,46 @@ class TodoSwipeCardEditor extends LitElement {
         border-bottom: 1px solid var(--divider-color);
         padding-bottom: 5px;
       }
+      
       ha-formfield {
         display: block;
         padding: 8px 0;
       }
+      
+      .expanded-content > div[style*="padding: 8px"] {
+        padding: 8px 0 !important;
+      }
+
       .background-image-row {
         margin-top: 8px;
         width: 100%;
       }
+      
       .background-image-row ha-textfield {
         width: 100%;
       }
+      
       .background-help-text {
         font-size: 12px;
         color: var(--secondary-text-color);
         margin-top: 4px;
         margin-bottom: 16px;
       }
+      
       .conditional-field {
         padding-left: 16px;
         margin-top: 0;
         border-left: 1px solid var(--divider-color);
         width: calc(100% - 16px);
       }
+      
       .add-entity-button {
         display: flex;
         justify-content: center;
         margin-top: 16px;
         margin-bottom: 24px;
       }
+      
       .add-todo-button {
         display: flex;
         align-items: center;
@@ -2403,10 +3220,35 @@ class TodoSwipeCardEditor extends LitElement {
         padding: 8px 16px;
         cursor: pointer;
         font-size: 14px;
+        transition: all 0.3s ease;
       }
+      
       .add-todo-button:hover {
         background-color: var(--secondary-background-color);
       }
+
+      .add-todo-button.blocked {
+        background-color: var(--error-color);
+        color: white;
+        border-color: var(--error-color);
+        animation: shake 0.3s ease-in-out;
+      }
+
+      .add-todo-button.success {
+        background-color: var(--success-color, #4caf50);
+        color: white;
+        border-color: var(--success-color, #4caf50);
+      }
+
+      @keyframes shake {
+        0%, 20%, 40%, 60%, 80% {
+          transform: translateX(0);
+        }
+        10%, 30%, 50%, 70%, 90% {
+          transform: translateX(-3px);
+        }
+      }
+      
       .info-panel {
         display: flex;
         align-items: flex-start;
@@ -2416,6 +3258,7 @@ class TodoSwipeCardEditor extends LitElement {
         border-radius: 8px;
         border: 1px solid var(--divider-color);
       }
+      
       .info-icon {
         display: flex;
         align-items: center;
@@ -2428,11 +3271,13 @@ class TodoSwipeCardEditor extends LitElement {
         margin-right: 12px;
         flex-shrink: 0;
       }
+      
       .info-text {
         flex-grow: 1;
         color: var(--primary-text-color);
         font-size: 14px;
       }
+      
       .version-display {
         margin-top: 24px;
         padding-top: 16px;
@@ -2441,11 +3286,13 @@ class TodoSwipeCardEditor extends LitElement {
         justify-content: space-between;
         align-items: center;
       }
+      
       .version-text {
         color: var(--secondary-text-color);
         font-size: 14px;
         font-weight: 500;
       }
+      
       .version-badge {
         background-color: var(--primary-color);
         color: var(--text-primary-color);
@@ -2455,21 +3302,25 @@ class TodoSwipeCardEditor extends LitElement {
         font-weight: 500;
         margin-left: auto;
       }
+      
       .spacing-field {
         margin-top: 16px;
         margin-bottom: 16px;
         width: 100%;
       }
+      
       .spacing-field ha-textfield {
         width: 100%;
         display: block;
       }
+      
       .spacing-help-text {
         font-size: 12px;
         color: var(--secondary-text-color);
         margin-top: 4px;
         margin-bottom: 16px;
       }
+      
       .toggle-option {
         display: flex;
         justify-content: space-between;
@@ -2477,14 +3328,17 @@ class TodoSwipeCardEditor extends LitElement {
         margin: 8px 0;
         width: 100%;
       }
+      
       .toggle-option-label {
         font-size: 14px;
       }
+      
       .version-info {
         font-size: 12px;
         color: var(--primary-color);
         margin-top: 4px;
       }
+      
       .todo-lists-container, 
       .display-options-container, 
       .background-images-container,
@@ -2498,53 +3352,198 @@ class TodoSwipeCardEditor extends LitElement {
         border-left: 1px solid var(--divider-color);
       }
 
-      .sort-row {
-        display: flex;
-        align-items: center;
-        margin-top: 8px;
+      /* Migration warning styles */
+      .migration-warning {
         margin-bottom: 16px;
-        margin-left: 0px;
-        width: 100%;
-        padding-left: 0px;
+        padding: 16px;
+        background: var(--error-color);
+        color: white;
+        border-radius: var(--ha-card-border-radius, 4px);
+        border: 1px solid var(--error-color);
       }
 
-      .sort-row ha-select {
-        width: calc(100% - 48px);
-        margin-right: 48px;
-        display: block;
+      .migration-warning-title {
+        font-weight: bold;
+        font-size: 16px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+      }
+
+      .migration-warning-icon {
+        margin-right: 8px;
+        font-size: 20px;
+      }
+
+      .migration-warning-text {
+        margin-bottom: 12px;
+        line-height: 1.4;
+      }
+
+      .migration-warning-properties {
+        margin: 8px 0;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 14px;
+      }
+
+      .migration-warning-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .migration-button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.2s ease;
+      }
+
+      .migration-button.primary {
+        background: white;
+        color: var(--error-color);
+      }
+
+      .migration-button.primary:hover {
+        background: #f0f0f0;
+      }
+
+      .migration-button.secondary {
+        background: transparent;
+        color: white;
+        border: 1px solid white;
+      }
+
+      .migration-button.secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
       }
     `;
   }
 
+  // New methods for entity management
+  _moveEntity(index, direction) {
+    if (!this._config?.entities) return;
+    const entities = [...this._config.entities];
+  
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= entities.length) return;
+  
+    // Swap the entities (preserving their full configuration)
+    [entities[index], entities[newIndex]] = [entities[newIndex], entities[index]];
+  
+    // Update expanded state for moved entities
+    if (this._expandedEntities.has(index)) {
+      this._expandedEntities.delete(index);
+      this._expandedEntities.add(newIndex);
+    }
+    if (this._expandedEntities.has(newIndex)) {
+      this._expandedEntities.delete(newIndex);
+      this._expandedEntities.add(index);
+    }
+  
+    const newConfig = { 
+      ...this._config, 
+      entities
+    };
+    
+    this._config = newConfig;
+    debugLog(`Moving entity at index ${index} to ${newIndex}`, newConfig);
+    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+    this.requestUpdate();
+  }
+
+  _toggleExpanded(index) {
+    if (this._expandedEntities.has(index)) {
+      // If clicking on already expanded item, collapse it
+      this._expandedEntities.delete(index);
+    } else {
+      // Close all other expanded items first (accordion behavior)
+      this._expandedEntities.clear();
+      // Then expand the clicked item
+      this._expandedEntities.add(index);
+    }
+    this.requestUpdate();
+  }
+
+  _triggerButtonFeedback(state) {
+    this._buttonFeedbackState = state;
+    this.requestUpdate();
+    
+    // Reset to normal state after a brief period
+    setTimeout(() => {
+      this._buttonFeedbackState = 'normal';
+      this.requestUpdate();
+    }, state === 'blocked' ? 1000 : 500); // Blocked state lasts longer for better visibility
+  }
+
+  _getAvailableEntities(currentIndex = -1) {
+    if (!this.hass) return [];
+    
+    // Get all todo domain entities
+    const allTodoEntities = Object.keys(this.hass.states).filter(entityId => 
+      entityId.startsWith('todo.') && this.hass.states[entityId]
+    );
+    
+    // Get currently selected entities (excluding the current index being edited)
+    const selectedEntities = (this._config.entities || [])
+      .map((entity, index) => {
+        if (index === currentIndex) return null;
+        return this._getEntityId(entity);
+      })
+      .filter(entityId => entityId && entityId.trim() !== "");
+    
+    // Return entities that are not already selected
+    return allTodoEntities.filter(entityId => !selectedEntities.includes(entityId));
+  }
+
+  _getEntityDescriptor(entity) {
+    const entityId = this._getEntityId(entity);
+    
+    if (!entityId || entityId.trim() === "") {
+      return { displayName: "Empty Entity", friendlyName: "" };
+    }
+    
+    const entityState = this.hass?.states?.[entityId];
+    const friendlyName = entityState?.attributes?.friendly_name || entityId.split('.').pop().replace(/_/g, ' ');
+    const displayName = friendlyName;
+    
+    return { displayName, friendlyName };
+  }
+
+  // Existing methods with minor updates
   _valueChanged(ev) {
     if (!this._config || !this.hass) {
       return;
     }
-
+  
     const target = ev.target;
     const value = target.checked !== undefined ? target.checked : target.value;
     const configValue = target.configValue || target.getAttribute('data-config-value');
     
     if (configValue) {
-      // Create a new config object with the updated value
-      const newConfig = { ...this._config, [configValue]: value };
-      this._config = newConfig; // Update internal state first
-      
-      // Use debounce to avoid excessive reflows for rapid changes
+      // Maintain property order with type first
+      const newConfig = this._createOrderedConfig({ ...this._config, [configValue]: value });
+      this._config = newConfig;
       this._debounceDispatch(newConfig);
     }
   }
 
-  // Debounce config change dispatches for better performance
   _debounceDispatch(newConfig) {
     if (this._debounceTimeout) {
       clearTimeout(this._debounceTimeout);
     }
     
     this._debounceTimeout = setTimeout(() => {
-      debugLog(`Dispatching config-changed event`, newConfig);
-      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
-    }, 150); // Reduced from 300ms
+      // Ensure proper order before dispatching
+      const orderedConfig = this._createOrderedConfig(newConfig);
+      debugLog(`Dispatching config-changed event`, orderedConfig);
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: orderedConfig } }));
+    }, 150);
   }
 
   _cardSpacingChanged(ev) {
@@ -2552,83 +3551,98 @@ class TodoSwipeCardEditor extends LitElement {
     
     const value = parseInt(ev.target.value);
     if (!isNaN(value) && value >= 0) {
-      const newConfig = { ...this._config, card_spacing: value };
-      this._config = newConfig; // Update internal state first
-      
+      const newConfig = this._createOrderedConfig({ ...this._config, card_spacing: value });
+      this._config = newConfig;
       debugLog(`Card spacing changed to: ${value}`, newConfig);
       this._debounceDispatch(newConfig);
     }
   }
 
   _addEntity(e) {
-    // Prevent any default behavior and stop propagation
+    console.log("[TodoSwipeCard] _addEntity method called");
+    
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
     
-    if (!this._config) return;
-    
-    // Create a deep copy of the current config to avoid reference issues
-    const newConfig = JSON.parse(JSON.stringify(this._config));
-    
-    // Ensure entities is an array
-    if (!Array.isArray(newConfig.entities)) {
-      newConfig.entities = newConfig.entities ? [newConfig.entities] : [];
+    if (!this._config) {
+      console.log("[TodoSwipeCard] No config available");
+      return;
     }
     
-    // Add a new empty entity
-    newConfig.entities.push("");
+    // Check if there's already an empty entity at the end - prevent multiple empty entries
+    const currentEntities = Array.isArray(this._config.entities) ? [...this._config.entities] : [];
+    const hasTrailingEmpty = currentEntities.length > 0 && 
+      (currentEntities[currentEntities.length - 1] === "" || 
+       (typeof currentEntities[currentEntities.length - 1] === 'object' && 
+        currentEntities[currentEntities.length - 1].entity === ""));
     
-    // Update internal state first
+    if (hasTrailingEmpty) {
+      console.log("[TodoSwipeCard] Already has trailing empty entity, skipping add");
+      
+      // Trigger visual feedback for blocked action
+      this._triggerButtonFeedback('blocked');
+      return;
+    }
+    
+    // Add new empty entity - use object format for new entities
+    currentEntities.push({ entity: "" });
+    
+    const newConfig = {
+      ...this._config,
+      entities: currentEntities
+    };
+    
+    // Update internal state
     this._config = newConfig;
     
-    // Request an update to ensure the UI reflects the change
-    this.requestUpdate();
-    
-    // Dispatch the event
     debugLog("Adding new entity", newConfig);
-    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
+    
+    // Trigger visual feedback for successful action
+    this._triggerButtonFeedback('success');
+    
+    // Dispatch the event immediately
+    this.dispatchEvent(new CustomEvent('config-changed', { 
+      detail: { config: newConfig },
+      bubbles: true,
+      composed: true
+    }));
+    
+    // Force update after a brief delay to ensure the change is processed
+    setTimeout(() => {
+      this.requestUpdate();
+    }, 0);
   }
 
   _removeEntity(index) {
     if (!this._config || !Array.isArray(this._config.entities)) return;
     
-    // Create deep copies of arrays/objects to ensure change detection
     const entities = [...this._config.entities];
-    const backgroundImages = {...this._config.background_images};
-    const displayOrders = {...this._config.display_orders}; // Add this line
     
-    // Get the entity being removed
-    const removedEntityId = entities[index];
-    
-    // Remove the entity
     entities.splice(index, 1);
-    
-    // Also remove associated background image and display order if they exist
-    if (removedEntityId && backgroundImages[removedEntityId]) {
-        delete backgroundImages[removedEntityId];
-    }
-    if (removedEntityId && displayOrders[removedEntityId]) {
-        delete displayOrders[removedEntityId]; // Add this line
-    }
   
-    // Create a new config with the updated arrays
+    // Update expanded state
+    this._expandedEntities.delete(index);
+    // Shift down expanded indices that are greater than removed index
+    const newExpandedEntities = new Set();
+    this._expandedEntities.forEach(expandedIndex => {
+      if (expandedIndex > index) {
+        newExpandedEntities.add(expandedIndex - 1);
+      } else if (expandedIndex < index) {
+        newExpandedEntities.add(expandedIndex);
+      }
+    });
+    this._expandedEntities = newExpandedEntities;
+  
     const newConfig = { 
-        ...this._config, 
-        entities, 
-        background_images: backgroundImages,
-        display_orders: displayOrders // Add this line
+      ...this._config, 
+      entities
     };
     
-    // Update internal state first
     this._config = newConfig;
-    
-    // Dispatch the event with the new config
     debugLog(`Removing entity at index ${index}`, newConfig);
     this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
-    
-    // Force UI update
     this.requestUpdate();
   }
 
@@ -2637,52 +3651,149 @@ class TodoSwipeCardEditor extends LitElement {
     if (isNaN(index)) return;
     
     const newValue = ev.detail?.value || ev.target.value || "";
-    const oldValue = this._config.entities[index];
-    
-    // Check if the value actually changed
-    if (newValue === oldValue) return;
-    
-    // Create deep copies to ensure change detection
     const entities = [...this._config.entities];
-    const backgroundImages = {...this._config.background_images};
-    const displayOrders = {...this._config.display_orders}; // Add this line
+    const currentEntity = entities[index];
     
-    // Update the entity
-    entities[index] = newValue;
-  
-    // Update background image and display order keys if entity changed
-    if (oldValue && backgroundImages[oldValue]) {
-        if (newValue) {
-            backgroundImages[newValue] = backgroundImages[oldValue];
-        }
-        delete backgroundImages[oldValue];
+    // Preserve existing entity configuration when changing entity ID
+    if (typeof currentEntity === 'object') {
+      entities[index] = { ...currentEntity, entity: newValue };
+    } else {
+      // Convert string to object format
+      entities[index] = { entity: newValue };
     }
-    if (oldValue && displayOrders[oldValue]) { // Add this block
-        if (newValue) {
-            displayOrders[newValue] = displayOrders[oldValue];
-        }
-        delete displayOrders[oldValue];
-    }
-  
-    // Create a new config with the updates
+
     const newConfig = { 
-        ...this._config, 
-        entities, 
-        background_images: backgroundImages,
-        display_orders: displayOrders // Add this line
+      ...this._config, 
+      entities
     };
     
-    // Update internal state first
     this._config = newConfig;
-    
-    // Dispatch the event
-    debugLog(`Entity at index ${index} changed from "${oldValue}" to "${newValue}"`, newConfig);
+    debugLog(`Entity at index ${index} changed to "${newValue}"`, newConfig);
     this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: newConfig } }));
-    
-    // Force UI update
     this.requestUpdate();
   }
 
+  _entityDisplayOrderChanged(ev) {
+    const index = parseInt(ev.target.getAttribute('data-index'));
+    if (isNaN(index)) return;
+    
+    const newValue = ev.target.value || 'none';
+    const entities = [...this._config.entities];
+    const currentEntity = entities[index];
+    
+    // Ensure entity is in object format
+    if (typeof currentEntity === 'string') {
+      entities[index] = { entity: currentEntity, display_order: newValue };
+    } else {
+      entities[index] = { ...currentEntity, display_order: newValue };
+    }
+
+    const newConfig = { ...this._config, entities };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+
+  _entityBackgroundImageChanged(ev) {
+    const index = parseInt(ev.target.getAttribute('data-index'));
+    if (isNaN(index)) return;
+    
+    const newValue = ev.target.value || "";
+    const entities = [...this._config.entities];
+    const currentEntity = entities[index];
+    
+    // Ensure entity is in object format
+    if (typeof currentEntity === 'string') {
+      const entityConfig = { entity: currentEntity };
+      if (newValue) {
+        entityConfig.background_image = newValue;
+      }
+      entities[index] = entityConfig;
+    } else {
+      if (newValue) {
+        entities[index] = { ...currentEntity, background_image: newValue };
+      } else {
+        const updatedEntity = { ...currentEntity };
+        delete updatedEntity.background_image;
+        entities[index] = updatedEntity;
+      }
+    }
+
+    const newConfig = { ...this._config, entities };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+
+  _entityTitleEnabledChanged(ev) {
+    const index = parseInt(ev.target.getAttribute('data-index'));
+    if (isNaN(index)) return;
+    
+    const enabled = ev.target.checked;
+    const entities = [...this._config.entities];
+    const currentEntity = entities[index];
+    
+    // Ensure entity is in object format
+    if (typeof currentEntity === 'string') {
+      entities[index] = { entity: currentEntity, show_title: enabled };
+    } else {
+      entities[index] = { ...currentEntity, show_title: enabled };
+    }
+
+    const newConfig = { ...this._config, entities };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+
+  _entityTitleTextChanged(ev) {
+    const index = parseInt(ev.target.getAttribute('data-index'));
+    if (isNaN(index)) return;
+    
+    const titleText = ev.target.value || "";
+    const entities = [...this._config.entities];
+    const currentEntity = entities[index];
+    
+    // Ensure entity is in object format
+    if (typeof currentEntity === 'string') {
+      const entityConfig = { entity: currentEntity };
+      if (titleText) {
+        entityConfig.title = titleText;
+      }
+      entities[index] = entityConfig;
+    } else {
+      if (titleText) {
+        entities[index] = { ...currentEntity, title: titleText };
+      } else {
+        const updatedEntity = { ...currentEntity };
+        delete updatedEntity.title;
+        entities[index] = updatedEntity;
+      }
+    }
+
+    const newConfig = { ...this._config, entities };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+
+  /**
+   * Get entity configuration at index
+   * @param {number} index - Entity index
+   * @returns {Object} Entity configuration
+   * @private
+   */
+  _getEntityConfigAtIndex(index) {
+    const entity = this._config.entities[index];
+    if (typeof entity === 'string') {
+      return { entity, display_order: 'none', show_title: false, title: '', background_image: '' };
+    }
+    return {
+      entity: entity?.entity || '',
+      display_order: entity?.display_order || 'none',
+      show_title: entity?.show_title || false,
+      title: entity?.title || '',
+      background_image: entity?.background_image || ''
+    };
+  }
+
+  // Legacy support methods (for backward compatibility during migration)
   _backgroundImageChanged(ev) {
     if (!ev.target) return;
     
@@ -2690,28 +3801,19 @@ class TodoSwipeCardEditor extends LitElement {
     if (!entityId) return;
     
     const imageUrl = ev.target.value || "";
-    
-    // Create a new background_images object
     const backgroundImages = { ...this._config.background_images };
 
-    // Update or remove the image URL
     if (imageUrl) {
       backgroundImages[entityId] = imageUrl;
     } else {
       delete backgroundImages[entityId];
     }
 
-    // Create new config with updated background_images
     const newConfig = { ...this._config, background_images: backgroundImages };
-    
-    // Update internal state first
     this._config = newConfig;
-    
-    // Use debounced dispatch for background image changes
     this._debounceDispatch(newConfig);
   }
 
-  // Add display order change handler
   _displayOrderChanged(ev) {
     if (!ev.target) return;
     
@@ -2719,26 +3821,45 @@ class TodoSwipeCardEditor extends LitElement {
     if (!entityId) return;
     
     const sortOrder = ev.target.value || 'none';
-    
-    // Create a new display_orders object
     const displayOrders = { ...this._config.display_orders };
     displayOrders[entityId] = sortOrder;
 
-    // Create new config with updated display_orders
     const newConfig = { ...this._config, display_orders: displayOrders };
-    
-    // Update internal state first
     this._config = newConfig;
-    
-    // Use debounced dispatch for display order changes
     this._debounceDispatch(newConfig);
   }
 
-  _stopPropagation(e) {
-    e.stopPropagation();
+  _titleEnabledChanged(ev) {
+    if (!ev.target) return;
+    
+    const entityId = ev.target.getAttribute('data-entity');
+    if (!entityId) return;
+    
+    const enabled = ev.target.checked;
+    const showTitles = { ...this._config.show_titles };
+    showTitles[entityId] = enabled;
+  
+    const newConfig = { ...this._config, show_titles: showTitles };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+  
+  _titleTextChanged(ev) {
+    if (!ev.target) return;
+    
+    const entityId = ev.target.getAttribute('data-entity');
+    if (!entityId) return;
+    
+    const titleText = ev.target.value || "";
+    const entityTitles = { ...this._config.entity_titles };
+    entityTitles[entityId] = titleText;
+  
+    const newConfig = { ...this._config, entity_titles: entityTitles };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
   }
 
-  // Add helper method to get sort mode options
+
   _getSortModeOptions() {
     return [
       { value: TodoSwipeCardEditor.TodoSortMode.NONE, label: 'Default' },
@@ -2749,66 +3870,226 @@ class TodoSwipeCardEditor extends LitElement {
     ];
   }
 
+    /**
+   * Handle expand button click with proper event handling
+   * @param {Event} e - Click event
+   * @param {number} index - Row index
+   */
+    _handleExpandClick(e, index) {
+      e.stopPropagation(); // Prevent row click from firing
+      this._toggleExpanded(index);
+    }
+  
+    /**
+     * Handle action button clicks (move up/down, delete) with proper event handling
+     * @param {Event} e - Click event
+     * @param {Function} action - Action to perform
+     */
+    _handleActionClick(e, action) {
+      e.stopPropagation(); // Prevent row click from firing
+      action(); // Execute the specific action (move or delete)
+    }
+  
+    /**
+     * Handle keyboard navigation for clickable rows
+     * @param {KeyboardEvent} e - Keyboard event
+     * @param {number} index - Row index
+     */
+    _handleRowKeydown(e, index) {
+      // Handle Enter or Space key to toggle expansion
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        this._toggleExpanded(index);
+      }
+    }
+  
+    /**
+     * Enhanced stop propagation method
+     * @param {Event} e - Event to stop
+     */
+    _stopPropagation(e) {
+      e.stopPropagation();
+      e.preventDefault(); // Also prevent default to be extra safe
+    }
+
   render() {
     if (!this.hass || !this._config) {
       return html`<div>Loading...</div>`;
     }
 
-    // Make sure we have an entities array
     const entities = Array.isArray(this._config.entities) ? this._config.entities : [];
-    
     debugLog("Rendering editor with config:", JSON.stringify(this._config));
     debugLog("Current entities:", entities);
 
     return html`
       <div class="card-config">
+        ${this._showMigrationWarning ? html`
+          <div class="migration-warning">
+            <div class="migration-warning-title">
+              <span class="migration-warning-icon">⚠️</span>
+              Configuration Update Required
+            </div>
+            <div class="migration-warning-text">
+              Your configuration uses deprecated properties that will be removed in a future version. 
+              The new format organizes settings per todo list for better maintainability.
+            </div>
+            <div class="migration-warning-properties">
+              Deprecated properties found: ${this._legacyConfig.legacyProperties.join(', ')}
+            </div>
+            <div class="migration-warning-actions">
+              <button 
+                class="migration-button primary"
+                @click=${this._handleAutoMigrate}
+              >
+                Auto-Migrate Configuration
+              </button>
+              <button 
+                class="migration-button secondary"
+                @click=${() => window.open('https://github.com/nutteloost/todo-swipe-card', '_blank')}
+              >
+                Go To README
+              </button>
+            </div>
+          </div>
+        ` : ''}
+
         <div class="info-panel">
           <div class="info-icon">i</div>
           <div class="info-text">
-            When adding (additional) to-do lists, you may need to click the "+" button twice. 
-            The first click updates the configuration, and the second click shows the entity picker.
+            Click the arrow button next to each todo list to expand and configure entity selection and sorting options.
           </div>
         </div>
 
         <!-- Todo Lists Section -->
         <div class="todo-lists-container">
           <div class="section-header">Todo Lists</div>
-          ${entities.map((entity, index) => html`
-            <div class="entity-row">
-              <ha-entity-picker
-                .hass=${this.hass}
-                .value=${entity}
-                .includeDomains=${['todo']}
-                data-index=${index}
-                @value-changed=${this._entityChanged}
-                allow-custom-entity
-              ></ha-entity-picker>
-              <ha-icon-button
-                .path=${'M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z'}
-                @click=${() => this._removeEntity(index)}
-                title="Remove this list"
-              ></ha-icon-button>
-            </div>
-            ${entity && entity.trim() !== "" ? html`
-              <div class="sort-row">
-                <ha-select
-                  .label=${"Sort Order"}
-                  .value=${this._config.display_orders && this._config.display_orders[entity] || 'none'}
-                  data-entity=${entity}
-                  @selected=${this._displayOrderChanged}
-                  @closed=${this._stopPropagation}
-                >
-                  ${this._getSortModeOptions().map(option => html`
-                    <mwc-list-item .value=${option.value}>
-                      ${option.label}
-                    </mwc-list-item>
-                  `)}
-                </ha-select>
-              </div>
-            ` : ''}
-          `)}
+          
+          <div class="card-list">
+            ${entities.length === 0 ?
+              html`<div class="no-cards">No todo lists added yet. Click "+ ADD TODO LIST" below to add your first list.</div>` :
+              entities.map((entity, index) => {
+                const descriptor = this._getEntityDescriptor(entity);
+                const isExpanded = this._expandedEntities.has(index);
+                const entityConfig = this._getEntityConfigAtIndex(index);
+                
+                return html`
+                  <div 
+                    class="card-row clickable-row ${isExpanded ? 'expanded' : ''}" 
+                    data-index=${index} 
+                    @click=${() => this._toggleExpanded(index)}
+                    role="button"
+                    tabindex="0"
+                    aria-expanded=${isExpanded}
+                    aria-label="Todo list ${index + 1}: ${descriptor.displayName}. Click to ${isExpanded ? 'collapse' : 'expand'}"
+                    @keydown=${(e) => this._handleRowKeydown(e, index)}
+                  >
+                    <div class="card-info">
+                      <ha-icon-button
+                        class="expand-button leading"
+                        label=${isExpanded ? "Collapse" : "Expand"}
+                        path=${isExpanded ? "M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" : "M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z"}
+                        @click=${(e) => this._handleExpandClick(e, index)}
+                      ></ha-icon-button>
+                      <span class="card-index">${index + 1}</span>
+                      <span class="card-type">${descriptor.displayName}</span>
+                      ${entityConfig.entity && entityConfig.entity.trim() !== "" ? 
+                        html`<span class="card-name">(${entityConfig.entity})</span>` : 
+                        html`<span class="card-name" style="color: var(--error-color);">(Not configured)</span>`
+                      }
+                    </div>
+                    <div class="card-actions" @click=${this._stopPropagation}>
+                      <ha-icon-button
+                        label="Move Up"
+                        ?disabled=${index === 0}
+                        path="M7,15L12,10L17,15H7Z"
+                        @click=${(e) => this._handleActionClick(e, () => this._moveEntity(index, -1))}
+                      ></ha-icon-button>
+                      <ha-icon-button
+                        label="Move Down"
+                        ?disabled=${index === entities.length - 1}
+                        path="M7,9L12,14L17,9H7Z"
+                        @click=${(e) => this._handleActionClick(e, () => this._moveEntity(index, 1))}
+                      ></ha-icon-button>
+                      <ha-icon-button
+                        label="Delete Todo List"
+                        path="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"
+                        @click=${(e) => this._handleActionClick(e, () => this._removeEntity(index))}
+                        style="color: var(--error-color);"
+                      ></ha-icon-button>
+                    </div>
+                  </div>
+                  ${isExpanded ? html`
+                    <div class="expanded-content">
+                      <ha-entity-picker
+                        .hass=${this.hass}
+                        .value=${entityConfig.entity}
+                        .includeDomains=${['todo']}
+                        .includeEntities=${this._getAvailableEntities(index)}
+                        data-index=${index}
+                        @value-changed=${this._entityChanged}
+                        allow-custom-entity
+                        label="Todo Entity"
+                      ></ha-entity-picker>
+                      
+                      ${entityConfig.entity && entityConfig.entity.trim() !== "" ? html`
+                        <div style="margin: 8px 0; background: var(--secondary-background-color); border-radius: 4px;">
+                          <div class="toggle-option" style="margin: 8px 0;">
+                            <div class="toggle-option-label">Show Title</div>
+                            <ha-switch
+                              .checked=${entityConfig.show_title}
+                              data-index=${index}
+                              @change=${this._entityTitleEnabledChanged}
+                            ></ha-switch>
+                          </div>
+                          
+                          ${entityConfig.show_title ? html`
+                            <ha-textfield
+                              label="Title Text"
+                              .value=${entityConfig.title}
+                              data-index=${index}
+                              @input=${this._entityTitleTextChanged}
+                              style="width: 100%; margin-top: 8px;"
+                            ></ha-textfield>
+                          ` : ''}
+                        </div>
+
+                        <ha-select
+                          .label=${"Display Order"}
+                          .value=${entityConfig.display_order}
+                          data-index=${index}
+                          @selected=${this._entityDisplayOrderChanged}
+                          @closed=${this._stopPropagation}
+                          style="margin-bottom: 8px;"
+                        >
+                          ${this._getSortModeOptions().map(option => html`
+                            <mwc-list-item .value=${option.value}>
+                              ${option.label}
+                            </mwc-list-item>
+                          `)}
+                        </ha-select>
+
+                        <ha-textfield
+                          label="Background Image URL"
+                          .value=${entityConfig.background_image}
+                          data-index=${index}
+                          @input=${this._entityBackgroundImageChanged}
+                          style="width: 100%; margin-top: 4px;"
+                          helper="Optional. Enter the path to an image (e.g., /local/images/bg.jpg)"
+                        ></ha-textfield>
+                      ` : ''}
+                    </div>
+                  ` : ''}
+                `;
+              })
+            }
+          </div>
+          
           <div class="add-entity-button">
-            <button class="add-todo-button" @click=${this._addEntity}>
+            <button 
+              class="add-todo-button ${this._buttonFeedbackState !== 'normal' ? this._buttonFeedbackState : ''}"
+              @click=${(e) => this._addEntity(e)}
+            >
               <svg style="width:20px;height:20px;margin-right:8px" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
               </svg>
@@ -2821,7 +4102,6 @@ class TodoSwipeCardEditor extends LitElement {
         <div class="display-options-container">
           <div class="section-header">Display Options</div>
 
-          <!-- Card spacing -->
           <div class="spacing-field">
             <ha-textfield
               type="number"
@@ -2838,7 +4118,6 @@ class TodoSwipeCardEditor extends LitElement {
             </div>
           </div>
 
-          <!-- Toggle options -->
           <div class="toggle-option">
             <div class="toggle-option-label">Show pagination dots</div>
             <ha-switch
@@ -2857,7 +4136,6 @@ class TodoSwipeCardEditor extends LitElement {
             ></ha-switch>
           </div>
 
-          <!-- Conditional Add Button option nested under Show create field -->
           ${this._show_create ? html`
             <div class="nested-toggle-option">
               <div class="toggle-option">
@@ -2871,7 +4149,6 @@ class TodoSwipeCardEditor extends LitElement {
             </div>
           ` : ''}
 
-          <!-- Show completed items -->
           <div class="toggle-option">
             <div class="toggle-option-label">Show completed items</div>
             <ha-switch
@@ -2881,7 +4158,6 @@ class TodoSwipeCardEditor extends LitElement {
             ></ha-switch>
           </div>
 
-          <!-- Conditional Completed Menu option -->
           ${this._show_completed ? html`
             <div class="nested-toggle-option">
               <div class="toggle-option">
@@ -2893,7 +4169,6 @@ class TodoSwipeCardEditor extends LitElement {
                 ></ha-switch>
               </div>
               
-              <!-- Delete confirmation option (only visible when delete button is shown) -->
               ${this._show_completed_menu ? html`
                 <div class="nested-toggle-option">
                   <div class="toggle-option">
@@ -2910,15 +4185,15 @@ class TodoSwipeCardEditor extends LitElement {
           ` : ''}
         </div>
 
-        <!-- Background images -->
+        <!-- Background images - only show for legacy configs -->
         ${this._showBackgroundImagesSection ? html`
           <div class="background-images-container">
-            <div class="section-header">Background Images</div>
+            <div class="section-header">Background Images (Legacy)</div>
             <div class="background-help-text">
-              Optional. Enter the path to an image (e.g., /local/images/bg.jpg).
+              ⚠️ This section is deprecated. Use the background image field in each entity's expanded configuration instead.
             </div>
-            ${this._validEntities.map(entityId => {
-              // Get the display name with proper capitalization
+            ${this._validEntities.map(entity => {
+              const entityId = this._getEntityId(entity);
               const entityName = this.hass.states[entityId]?.attributes?.friendly_name ||
                                 entityId.split('.').pop().replace(/_/g, ' ');
               return html`
@@ -2938,7 +4213,7 @@ class TodoSwipeCardEditor extends LitElement {
         <!-- Version display -->
         <div class="version-display">
           <div class="version-text">Todo Swipe Card</div>
-          <div class="version-badge">v1.6.1</div>
+          <div class="version-badge">v${VERSION}</div>
         </div>
       </div>
     `;
@@ -2968,7 +4243,7 @@ if (!registered) {
 
 // Version logging
 console.info(
-  `%c TODO-SWIPE-CARD %c v1.6.1 %c - A swipeable card for to-do lists`,
+  `%c TODO-SWIPE-CARD %c v${VERSION} %c - A swipeable card for to-do lists`,
   "color: white; background: #4caf50; font-weight: 700;",
   "color: #4caf50; background: white; font-weight: 700;",
   "color: grey; background: white; font-weight: 400;"
