@@ -91,7 +91,7 @@ This card can be configured using the visual editor or YAML.
 | entity | string | Required | Todo list entity ID |
 | show_title | boolean | false | Show custom title above todo list |
 | title | string | Optional | Custom title text (Only used if show_title is true) |
-| background_image | string | Optiona; | Background image URL for this entity |
+| background_image | string | Optional | Background image URL for this entity |
 | display_order | string | none | Sort order: `none`, `alpha_asc`, `alpha_desc`, `duedate_asc`, `duedate_desc` |
 
 
