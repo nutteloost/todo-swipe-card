@@ -294,7 +294,7 @@ card_mod:
 
 #### Example 1
 
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_advanced.png" style="width: 100%;max-width: 320px;" alt="Example 1">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_advanced.png" width="400" alt="Example 1">
 
 <details>
 <summary><strong>Example 1 (Advanced) Configuration:</strong></summary>
@@ -376,7 +376,7 @@ card_mod:
 
 #### Example 2
 
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" style="width: 100%; max-width: 320px;" alt="Example 2">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_1.png" width="400" alt="Example 2">
 
 <details>
 <summary><strong>Example 2 Configuration</strong></summary>
@@ -414,7 +414,7 @@ card_mod:
 
 #### Example 3
 
-<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" style="width: 100%; max-width: 320px;" alt="Example 3">
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_2.png" width="400" alt="Example 3">
 
 <details>
 <summary><strong>Example 3 Configuration</strong></summary>
