@@ -2837,7 +2837,10 @@ class TodoSwipeCardEditor extends LitElement {
       
       // Only filter out empty entities if they're not at the end of the array
       // This allows newly added empty entities to persist for user configuration
-      const hasTrailingEmpty = entities.length > 0 && entities[entities.length - 1] === "";
+      const hasTrailingEmpty = entities.length > 0 && 
+        (entities[entities.length - 1] === "" || 
+         (typeof entities[entities.length - 1] === 'object' && 
+          entities[entities.length - 1].entity === ""));
       if (!hasTrailingEmpty) {
         entities = entities.filter(e => {
           if (typeof e === 'string') {
