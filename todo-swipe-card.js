@@ -1905,7 +1905,7 @@ class TodoSwipeCard extends HTMLElement {
         ha-check-list-item .description,
         ha-check-list-item ha-markdown-element.description {
           color: var(--todo-swipe-card-font-color-description, var(--secondary-text-color)) !important;
-          font-size: var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)) !important;
+          font-size: var(--todo-swipe-card-font-size-description, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px))) !important;
           margin-top: var(--todo-swipe-card-description-margin-top, 2px) !important;
           line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
