@@ -245,6 +245,7 @@ card_mod:
 /* Typography and Layout */
 --todo-swipe-card-font-size:                            /* Base font size for todo items (default: 11px) */
 --todo-swipe-card-font-size-due-date:                   /* Font size for due dates and associated icon (default: 11px) */
+--todo-swipe-card-font-size-description:                /* Font size of the description text of todo items */
 --todo-swipe-card-font-color-description:               /* Color of the description text of todo items */
 --todo-swipe-card-font-color-due-date:                  /* Color of the due dates and associated icon */
 --todo-swipe-card-font-color-due-date-overdue:          /* Color of overdue due dates text and associated icon */
