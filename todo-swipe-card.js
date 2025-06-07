@@ -3292,7 +3292,6 @@ class TodoSwipeCardEditor extends LitElement {
         display: flex;
         justify-content: center;
         margin-top: 16px;
-        margin-bottom: 24px;
       }
       
       .add-todo-button {
