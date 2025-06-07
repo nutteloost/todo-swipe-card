@@ -480,31 +480,6 @@ For even more customization, you can apply different title styles to individual 
 The following example shows how to style titles differently for each card using the `.slide:nth-child()` selector:
 
 ```yaml
-type: custom:todo-swipe-card
-entities:
-  - entity: todo.shopping_list
-    show_title: true
-    title: 🛒 Shopping
-  - entity: todo.home_tasks
-    show_title: true
-    title: 🏠 Home Tasks
-    display_order: none
-    icon: mdi:check-all
-  - entity: todo.work_projects
-    show_title: true
-    title: 💼 Work
-    display_order: none
-  - entity: todo.personal_goals
-    show_title: true
-    title: ✨ Goals
-card_spacing: 15
-show_pagination: true
-show_icons: true
-show_create: true
-show_addbutton: true
-show_completed: true
-show_completed_menu: true
-delete_confirmation: true
 card_mod:
   style: |
     :host {
