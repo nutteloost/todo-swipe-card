@@ -16,7 +16,7 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.5.1/lit-element.js?module";
 
 // Version number
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 
 // Configurable debug mode - set to false for production
 const DEBUG = false;
