@@ -467,6 +467,128 @@ card_mod:
 ```
 </details>
 
+
+#### Example 4 - Advanced Per-Card Title Styling
+
+<img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/todo-swipe-card_example_4_advanced.png" width="400" alt="Example 4">
+
+<details>
+<summary><strong>Example 4 (Advanced Per-Card Title Styling):</strong></summary>
+
+For even more customization, you can apply different title styles to individual cards using CSS selectors. This allows each todo list to have its own unique title appearance while maintaining consistent base styling.
+
+The following example shows how to style titles differently for each card using the `.slide:nth-child()` selector:
+
+```yaml
+type: custom:todo-swipe-card
+entities:
+  - entity: todo.shopping_list
+    show_title: true
+    title: 🛒 Shopping
+  - entity: todo.home_tasks
+    show_title: true
+    title: 🏠 Home Tasks
+    display_order: none
+    icon: mdi:check-all
+  - entity: todo.work_projects
+    show_title: true
+    title: 💼 Work
+    display_order: none
+  - entity: todo.personal_goals
+    show_title: true
+    title: ✨ Goals
+card_spacing: 15
+show_pagination: true
+show_icons: true
+show_create: true
+show_addbutton: true
+show_completed: true
+show_completed_menu: true
+delete_confirmation: true
+card_mod:
+  style: |
+    :host {
+      /* Dark background with neon accents */
+      --todo-swipe-card-background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+      --todo-swipe-card-text-color: #00ff9f;
+      
+      /* Title styles */
+      --todo-swipe-card-title-height: 35px;
+      --todo-swipe-card-title-font-size: 18px;
+      --todo-swipe-card-title-font-weight: 700;
+      --todo-swipe-card-title-border-width: 4px;
+      --todo-swipe-card-delete-button-top: 78px;
+      
+      /* Neon checkboxes */
+      --todo-swipe-card-checkbox-color: rgba(0, 255, 159, 0.3);
+      --todo-swipe-card-checkbox-checked-color: #ff006e;
+      --todo-swipe-card-checkbox-checkmark-color: #ffffff;
+      --todo-swipe-card-checkbox-size: 24px;
+      
+      /* Typography */
+      --todo-swipe-card-font-size: 13px;
+      --todo-swipe-card-font-color-due-date: #8338ec;
+      --todo-swipe-card-font-color-due-date-overdue: #ff006e;
+      --todo-swipe-card-font-color-description: rgba(0, 255, 159, 0.7);
+      
+      /* Glowing icons */
+      --todo-swipe-card-icon-color: #00ff9f;
+      --todo-swipe-card-icon-size: 40px;
+      --todo-swipe-card-icon-opacity: 0.8;
+      
+      /* Neon pagination */
+      --todo-swipe-card-pagination-dot-active-color: #ff006e;
+      --todo-swipe-card-pagination-dot-inactive-color: rgba(131, 56, 236, 0.4);
+      --todo-swipe-card-pagination-dot-size: 8px;
+      --todo-swipe-card-pagination-dot-active-size-multiplier: 1.3;
+      
+      /* Interactive elements */
+      --todo-swipe-card-add-button-color: #00ff9f;
+      --todo-swipe-card-delete-button-color: #ff006e;
+    }
+
+    ha-card {
+      border-style: hidden;
+    }
+
+    /* First card - Electric Pink */
+    .slide:nth-child(1) .todo-swipe-card-external-title {
+      background: linear-gradient(90deg, #ff006e 0%, #ff0080 100%) !important;
+      color: #ffffff !important;
+      border-bottom-color: #ff006e !important;
+    }
+
+    /* Second card - Neon Green */
+    .slide:nth-child(2) .todo-swipe-card-external-title {
+      background: linear-gradient(90deg, #00ff9f 0%, #00e5ff 100%) !important;
+      color: #0f0f23 !important;
+      border-bottom-color: #00ff9f !important;
+    }
+
+    /* Third card - Electric Blue */
+    .slide:nth-child(3) .todo-swipe-card-external-title {
+      background: linear-gradient(90deg, #3a86ff 0%, #8338ec 100%) !important;
+      color: #ffffff !important;
+      border-bottom-color: #3a86ff !important;
+    }
+
+    /* Fourth card - Cyber Purple */
+    .slide:nth-child(4) .todo-swipe-card-external-title {
+      background: linear-gradient(90deg, #8338ec 0%, #ff006e 100%) !important;
+      color: #ffffff !important;
+      border-bottom-color: #8338ec !important;
+    }
+```
+
+#### How it works:
+
+The `:nth-child()` selector targets specific slides based on their position (1st, 2nd, 3rd, etc.)
+Each card can have completely different title styling while sharing the same base configuration.
+Don't forget to adjust `--todo-swipe-card-delete-button-top` if you change the title height to ensure proper button positioning (like I did in this example)
+
+This technique works with any CSS property - background colors, gradients, borders, shadows, and more!
+</details>
+
 ### My Other Custom Cards
 
 Check out my other custom cards for Home Assistant:
