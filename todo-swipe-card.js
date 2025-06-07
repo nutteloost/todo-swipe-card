@@ -16,7 +16,7 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.5.1/lit-element.js?module";
 
 // Version number
-const VERSION = '2.0.1';
+const VERSION = '2.1.0';
 
 // Configurable debug mode - set to false for production
 const DEBUG = false;
@@ -68,6 +68,7 @@ class TodoSwipeCard extends HTMLElement {
       entities: [],
       card_spacing: 15,
       show_pagination: true,
+      show_icons: false,
       show_create: true,
       show_addbutton: false,
       show_completed: false,
@@ -543,12 +544,13 @@ class TodoSwipeCard extends HTMLElement {
       }
     }
 
-    // Prioritize card_mod if available, then fall back to custom_card_mod
-    if (config.card_mod && typeof config.card_mod === 'object') {
+    // Handle card_mod configuration - only include if it has meaningful content
+    if (config.card_mod && typeof config.card_mod === 'object' && Object.keys(config.card_mod).length > 0) {
       newConfig.custom_card_mod = config.card_mod;
-    } else if (!newConfig.custom_card_mod || typeof newConfig.custom_card_mod !== 'object') {
-      newConfig.custom_card_mod = {};
+    } else if (config.custom_card_mod && typeof config.custom_card_mod === 'object' && Object.keys(config.custom_card_mod).length > 0) {
+      newConfig.custom_card_mod = config.custom_card_mod;
     }
+    // Don't set custom_card_mod to empty object if it doesn't exist or is empty
 
     // Check if config actually changed
     if (!this._hasConfigChanged(newConfig)) {
@@ -1279,6 +1281,20 @@ class TodoSwipeCard extends HTMLElement {
         padding: 8px 16px 16px 16px;
         color: var(--primary-text-color);
       }
+      
+      /* Todo icon styling */
+      .todo-icon {
+        position: absolute;
+        right: var(--todo-swipe-card-icon-right, 16px);
+        bottom: var(--todo-swipe-card-icon-bottom, 8px);
+        width: var(--todo-swipe-card-icon-size, 48px);
+        height: var(--todo-swipe-card-icon-size, 48px);
+        color: var(--todo-swipe-card-icon-color, rgba(255, 255, 255, 0.3));
+        opacity: var(--todo-swipe-card-icon-opacity, 0.6);
+        z-index: 1;
+        pointer-events: none;
+        --mdc-icon-size: var(--todo-swipe-card-icon-size, 48px);
+      }
     `;
     
     return style;
@@ -1416,11 +1432,17 @@ class TodoSwipeCard extends HTMLElement {
           
           // Add card to slide
           slideDiv.appendChild(cardElement);
-          
+
           // Add custom delete button if configured
           if (this._config.show_completed && this._config.show_completed_menu) {
             const deleteButton = this._createDeleteButton(entityId, entityConfig);
             slideDiv.appendChild(deleteButton);
+          }
+
+          // Add icon if configured
+          if (this._config.show_icons) {
+            const iconElement = this._createIconElement(entityConfig, entityId);
+            slideDiv.appendChild(iconElement);
           }
           
           this.sliderElement.appendChild(slideDiv);
@@ -1587,6 +1609,36 @@ class TodoSwipeCard extends HTMLElement {
     wrapper.appendChild(cardContainer);
     
     return wrapper;
+  }
+
+  /**
+   * Create an icon element for the slide
+   * @param {string|Object} entityConfig - Entity configuration
+   * @param {string} entityId - Entity ID
+   * @returns {HTMLElement} Icon element
+   * @private
+   */
+  _createIconElement(entityConfig, entityId) {
+    // Determine which icon to use
+    let iconName = 'mdi:format-list-checks'; // Default fallback icon
+    
+    // Check for custom icon in entity config
+    if (typeof entityConfig === 'object' && entityConfig.icon) {
+      iconName = entityConfig.icon;
+    } else if (this._hass && this._hass.states[entityId]) {
+      // Use entity's default icon if available
+      const entityIcon = this._hass.states[entityId].attributes.icon;
+      if (entityIcon) {
+        iconName = entityIcon;
+      }
+    }
+    
+    // Create icon element
+    const iconElement = document.createElement('ha-icon');
+    iconElement.className = 'todo-icon';
+    iconElement.icon = iconName;
+    
+    return iconElement;
   }
 
   /**
@@ -2790,15 +2842,28 @@ class TodoSwipeCardEditor extends LitElement {
       show_addbutton: config.show_addbutton,
       show_completed: config.show_completed,
       show_completed_menu: config.show_completed_menu,
-      delete_confirmation: config.delete_confirmation,
-      ...Object.fromEntries(
-        Object.entries(config).filter(([key]) => ![
-          'type', 'entities', 'card_spacing', 'show_pagination', 
-          'show_create', 'show_addbutton', 'show_completed', 
-          'show_completed_menu', 'delete_confirmation'
-        ].includes(key))
-      )
+      delete_confirmation: config.delete_confirmation
     };
+
+    // Add other properties, but exclude empty custom_card_mod
+    const excludedKeys = [
+      'type', 'entities', 'card_spacing', 'show_pagination', 
+      'show_create', 'show_addbutton', 'show_completed', 
+      'show_completed_menu', 'delete_confirmation', 'custom_card_mod'
+    ];
+
+    Object.entries(config).forEach(([key, value]) => {
+      if (!excludedKeys.includes(key)) {
+        orderedConfig[key] = value;
+      }
+    });
+
+    // Only include custom_card_mod if it exists and has meaningful content
+    if (config.custom_card_mod && 
+        typeof config.custom_card_mod === 'object' && 
+        Object.keys(config.custom_card_mod).length > 0) {
+      orderedConfig.custom_card_mod = config.custom_card_mod;
+    }
     
     return orderedConfig;
   }
@@ -2869,18 +2934,20 @@ class TodoSwipeCardEditor extends LitElement {
         }
       }
       
-      let customCardMod = config.custom_card_mod;
-      if (!customCardMod || typeof customCardMod !== 'object') {
-        customCardMod = {};
-      }
-
-      this._config = {
+      // Only include custom_card_mod if it exists and has content
+      const configUpdate = {
         ...this._config,
         ...config,
         entities,
-        card_spacing: cardSpacing,
-        custom_card_mod: customCardMod
+        card_spacing: cardSpacing
       };
+
+      // Only add custom_card_mod if it exists in the original config and has meaningful content
+      if (config.custom_card_mod && typeof config.custom_card_mod === 'object' && Object.keys(config.custom_card_mod).length > 0) {
+        configUpdate.custom_card_mod = config.custom_card_mod;
+      }
+
+      this._config = configUpdate;
     }
     
     debugLog("TodoSwipeCardEditor - Config after initialization:", JSON.stringify(this._config));
@@ -2912,6 +2979,10 @@ class TodoSwipeCardEditor extends LitElement {
     return this._config.delete_confirmation === true;
   }
 
+  get _show_icons() {
+    return this._config.show_icons === true;
+  }
+
   get _card_spacing() {
     return this._config.card_spacing !== undefined ? this._config.card_spacing : 15;
   }
@@ -2941,6 +3012,27 @@ class TodoSwipeCardEditor extends LitElement {
 
   static get styles() {
     return css`
+      /* Card config container */
+      .card-config {
+        /* Let HA handle padding */
+      }
+
+      /* MAIN SECTION STYLES */
+      .section {
+        margin: 16px 0;
+        padding: 16px;
+        border: 1px solid var(--divider-color);
+        border-radius: var(--ha-card-border-radius, 8px);
+        background-color: var(--card-background-color, var(--primary-background-color));
+      }
+
+      .section-header {
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 12px;
+        color: var(--primary-text-color);
+      }
+
       ha-switch {
         padding: 8px 0;
       }
@@ -3142,7 +3234,8 @@ class TodoSwipeCardEditor extends LitElement {
       /* Target all textfields in expanded content */
       .expanded-content ha-textfield {
         width: 100% !important;
-        margin: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
         padding: 0 !important;
         box-sizing: border-box !important;
       }
@@ -3161,16 +3254,6 @@ class TodoSwipeCardEditor extends LitElement {
         margin: 8px 0 0 0 !important;
         padding: 0 !important;
         box-sizing: border-box !important;
-      }
-      
-      .section-header {
-        margin-top: 24px;
-        margin-bottom: 16px;
-        color: var(--secondary-text-color);
-        font-weight: 500;
-        font-size: 16px;
-        border-bottom: 1px solid var(--divider-color);
-        padding-bottom: 5px;
       }
       
       ha-formfield {
@@ -3296,6 +3379,12 @@ class TodoSwipeCardEditor extends LitElement {
         font-weight: 500;
       }
       
+      .version-badges {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
       .version-badge {
         background-color: var(--primary-color);
         color: var(--text-primary-color);
@@ -3303,7 +3392,33 @@ class TodoSwipeCardEditor extends LitElement {
         padding: 4px 12px;
         font-size: 14px;
         font-weight: 500;
-        margin-left: auto;
+      }
+      
+      .github-badge {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background-color: #24292e;
+        color: white;
+        border-radius: 16px;
+        padding: 4px 12px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background-color 0.2s ease;
+      }
+      
+      .github-badge:hover {
+        background-color: #444d56;
+      }
+      
+      .github-badge ha-icon {
+        --mdc-icon-size: 16px;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       
       .spacing-field {
@@ -3340,13 +3455,6 @@ class TodoSwipeCardEditor extends LitElement {
         font-size: 12px;
         color: var(--primary-color);
         margin-top: 4px;
-      }
-      
-      .todo-lists-container, 
-      .display-options-container, 
-      .background-images-container,
-      .custom-card-mod-container {
-        width: 100%;
       }
       
       .nested-toggle-option {
@@ -3776,6 +3884,36 @@ class TodoSwipeCardEditor extends LitElement {
     this._debounceDispatch(newConfig);
   }
 
+  _entityIconChanged(ev) {
+    const index = parseInt(ev.target.getAttribute('data-index'));
+    if (isNaN(index)) return;
+    
+    const iconName = ev.target.value || "";
+    const entities = [...this._config.entities];
+    const currentEntity = entities[index];
+    
+    // Ensure entity is in object format
+    if (typeof currentEntity === 'string') {
+      const entityConfig = { entity: currentEntity };
+      if (iconName) {
+        entityConfig.icon = iconName;
+      }
+      entities[index] = entityConfig;
+    } else {
+      if (iconName) {
+        entities[index] = { ...currentEntity, icon: iconName };
+      } else {
+        const updatedEntity = { ...currentEntity };
+        delete updatedEntity.icon;
+        entities[index] = updatedEntity;
+      }
+    }
+  
+    const newConfig = { ...this._config, entities };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+
   /**
    * Get entity configuration at index
    * @param {number} index - Entity index
@@ -3792,7 +3930,8 @@ class TodoSwipeCardEditor extends LitElement {
       display_order: entity?.display_order || 'none',
       show_title: entity?.show_title || false,
       title: entity?.title || '',
-      background_image: entity?.background_image || ''
+      background_image: entity?.background_image || '',
+      icon: entity?.icon || ''
     };
   }
 
@@ -3965,7 +4104,7 @@ class TodoSwipeCardEditor extends LitElement {
         </div>
 
         <!-- Todo Lists Section -->
-        <div class="todo-lists-container">
+        <div class="section">
           <div class="section-header">Todo Lists</div>
           
           <div class="card-list">
@@ -4063,7 +4202,7 @@ class TodoSwipeCardEditor extends LitElement {
                           data-index=${index}
                           @selected=${this._entityDisplayOrderChanged}
                           @closed=${this._stopPropagation}
-                          style="margin-bottom: 8px;"
+                          style="margin-bottom: 4px;"
                         >
                           ${this._getSortModeOptions().map(option => html`
                             <mwc-list-item .value=${option.value}>
@@ -4078,8 +4217,19 @@ class TodoSwipeCardEditor extends LitElement {
                           data-index=${index}
                           @input=${this._entityBackgroundImageChanged}
                           style="width: 100%; margin-top: 4px;"
-                          helper="Optional. Enter the path to an image (e.g., /local/images/bg.jpg)"
+                          placeholder="Optional: e.g. /local/images/background.jpg"
                         ></ha-textfield>
+
+                        ${this._show_icons ? html`
+                          <ha-textfield
+                            label="Custom Icon"
+                            .value=${entityConfig.icon}
+                            data-index=${index}
+                            @input=${this._entityIconChanged}
+                            style="width: 100%; margin-top: 8px;"
+                            placeholder="Optional: e.g. mdi:cart-variant"
+                          ></ha-textfield>
+                        ` : ''}
                       ` : ''}
                     </div>
                   ` : ''}
@@ -4102,7 +4252,7 @@ class TodoSwipeCardEditor extends LitElement {
         </div>
 
         <!-- Display Options Section -->
-        <div class="display-options-container">
+        <div class="section">
           <div class="section-header">Display Options</div>
 
           <div class="spacing-field">
@@ -4126,6 +4276,15 @@ class TodoSwipeCardEditor extends LitElement {
             <ha-switch
               .checked=${this._show_pagination}
               data-config-value="show_pagination"
+              @change=${this._valueChanged}
+            ></ha-switch>
+          </div>
+
+          <div class="toggle-option">
+            <div class="toggle-option-label">Show icons</div>
+            <ha-switch
+              .checked=${this._show_icons}
+              data-config-value="show_icons"
               @change=${this._valueChanged}
             ></ha-switch>
           </div>
@@ -4190,7 +4349,7 @@ class TodoSwipeCardEditor extends LitElement {
 
         <!-- Background images - only show for legacy configs -->
         ${this._showBackgroundImagesSection ? html`
-          <div class="background-images-container">
+          <div class="section">
             <div class="section-header">Background Images (Legacy)</div>
             <div class="background-help-text">
               ⚠️ This section is deprecated. Use the background image field in each entity's expanded configuration instead.
@@ -4213,10 +4372,19 @@ class TodoSwipeCardEditor extends LitElement {
           </div>
         ` : ''}
 
-        <!-- Version display -->
+        <!-- Version Display with GitHub Link -->
         <div class="version-display">
           <div class="version-text">Todo Swipe Card</div>
-          <div class="version-badge">v${VERSION}</div>
+          <div class="version-badges">
+            <div class="version-badge">v${VERSION}</div>
+            <a href="https://github.com/nutteloost/todo-swipe-card" 
+               target="_blank" 
+               rel="noopener noreferrer"
+               class="github-badge">
+              <ha-icon icon="mdi:github"></ha-icon>
+              <span>GitHub</span>
+            </a>
+          </div>
         </div>
       </div>
     `;
