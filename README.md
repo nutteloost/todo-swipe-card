@@ -87,6 +87,7 @@ This card can be configured using the visual editor or YAML.
 |------|------|---------|-------------|
 | entities | list | Required | List of todo entities to display |
 | show_pagination | boolean | true | Show/hide pagination dots |
+| show_icons | boolean | false | Show/hide icons for each todo list |
 | show_addbutton | boolean | false | Show/hide the "+" button next to the add field |
 | show_create | boolean | true | Show/hide the add item input field |
 | show_completed | boolean | false | Show/hide completed items |
@@ -103,6 +104,7 @@ This card can be configured using the visual editor or YAML.
 | title | string | Optional | Custom title text (Only used if show_title is true) |
 | background_image | string | Optional | Background image URL for this entity |
 | display_order | string | none | Sort order: `none`, `alpha_asc`, `alpha_desc`, `duedate_asc`, `duedate_desc` |
+| icon | string | Optional | Custom icon for this todo list (e.g., `mdi:cart-variant`) |
 
 
 ### Example Configuration
@@ -129,14 +131,18 @@ entities:
     show_title: true
     title: "Shopping List"
     display_order: alpha_asc
+    icon: mdi:cart-variant
   - entity: todo.home_tasks
     background_image: /local/images/home_bg.jpg
     show_title: true
     title: "Home Tasks"
     display_order: duedate_asc
+    icon: mdi:home-variant
   - entity: todo.work_projects
     display_order: none
+    icon: mdi:briefcase-variant
 show_pagination: true
+show_icons: true
 show_addbutton: true
 show_create: true
 show_completed: true
@@ -269,6 +275,13 @@ card_mod:
 --todo-swipe-card-title-padding-horizontal:             /* Horizontal padding of entity titles (default: 16px) */
 --todo-swipe-card-title-justify:                        /* Title alignment: flex-start, center, flex-end (default: center) */
 
+/* Icon Styling */
+--todo-swipe-card-icon-size:                            /* Size of todo list icons (default: 48px) */
+--todo-swipe-card-icon-color:                           /* Color of todo list icons with opacity support */
+--todo-swipe-card-icon-opacity:                         /* Opacity of todo list icons (default: 0.6) */
+--todo-swipe-card-icon-right:                           /* Distance of icon from right edge (default: 16px) */
+--todo-swipe-card-icon-bottom:                          /* Distance of icon from bottom edge (default: 8px) */
+
 /* Checkbox Styling */
 --todo-swipe-card-checkbox-color:                        /* Color of unchecked checkboxes, use rgba values to also control opacity (rgba(255, 0, 0, 0.6);) */
 --todo-swipe-card-checkbox-checked-color:                /* Color of checked checkboxes (default: var(--primary-color)) */
@@ -317,12 +330,15 @@ entities:
     show_title: true
     title: 🛒 Shopping List
     display_order: alpha_asc
+    icon: mdi:cart-variant
   - entity: todo.work_projects
     show_title: true
     title: 💼 Work Projects
     display_order: duedate_desc
+    icon: mdi:hammer-screwdriver
 card_spacing: 10
 show_pagination: true
+show_icons: true
 show_create: true
 show_addbutton: true
 show_completed: true
