@@ -16,7 +16,7 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.5.1/lit-element.js?module";
 
 // Version number
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 
 // Configurable debug mode - set to false for production
 const DEBUG = false;
@@ -1675,6 +1675,7 @@ class TodoSwipeCard extends HTMLElement {
           /* Input styling with text cutoff before add button */
           .mdc-text-field__input {
             color: ${textColor} !important;
+            font-weight: var(--todo-swipe-card-input-font-weight, normal) !important;
             max-width: calc(100% - 13px) !important;
             padding-right: 10px !important;
             margin-left: -4px !important;
@@ -1708,22 +1709,26 @@ class TodoSwipeCard extends HTMLElement {
           .mdc-text-field__input::placeholder {
             color: var(--todo-swipe-card-placeholder-color, ${textColor}) !important;
             opacity: var(--todo-swipe-card-placeholder-opacity, 1) !important;
+            font-weight: var(--todo-swipe-card-placeholder-font-weight, normal) !important;
           }
           
           /* Cross-browser placeholder support */
           .mdc-text-field__input::-webkit-input-placeholder {
             color: var(--todo-swipe-card-placeholder-color, ${textColor}) !important;
             opacity: var(--todo-swipe-card-placeholder-opacity, 1) !important;
+            font-weight: var(--todo-swipe-card-placeholder-font-weight, normal) !important;
           }
           
           .mdc-text-field__input::-moz-placeholder {
             color: var(--todo-swipe-card-placeholder-color, ${textColor}) !important;
             opacity: var(--todo-swipe-card-placeholder-opacity, 1) !important;
+            font-weight: var(--todo-swipe-card-placeholder-font-weight, normal) !important;
           }
           
           .mdc-text-field__input:-ms-input-placeholder {
             color: var(--todo-swipe-card-placeholder-color, ${textColor}) !important;
             opacity: var(--todo-swipe-card-placeholder-opacity, 1) !important;
+            font-weight: var(--todo-swipe-card-placeholder-font-weight, normal) !important;
           }
         `
       },
@@ -1754,6 +1759,7 @@ class TodoSwipeCard extends HTMLElement {
         .mdc-list-item__text,
         .mdc-list-item__primary-text {
           color: ${textColor} !important;
+          font-weight: var(--todo-swipe-card-item-font-weight, normal) !important;
         }
 
         :host {
@@ -1897,6 +1903,7 @@ class TodoSwipeCard extends HTMLElement {
           text-overflow: clip !important;
           white-space: normal !important;
           color: ${textColor} !important;
+          font-weight: var(--todo-swipe-card-item-font-weight, normal) !important;
           line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
 
@@ -1907,6 +1914,7 @@ class TodoSwipeCard extends HTMLElement {
           text-overflow: clip !important;
           white-space: normal !important;
           color: ${textColor} !important;
+          font-weight: var(--todo-swipe-card-item-font-weight, normal) !important;
           line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
 
@@ -1958,6 +1966,7 @@ class TodoSwipeCard extends HTMLElement {
         ha-check-list-item ha-markdown-element.description {
           color: var(--todo-swipe-card-font-color-description, var(--secondary-text-color)) !important;
           font-size: var(--todo-swipe-card-font-size-description, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px))) !important;
+          font-weight: var(--todo-swipe-card-font-weight-description, normal) !important;
           margin-top: var(--todo-swipe-card-description-margin-top, 2px) !important;
           line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
@@ -1968,6 +1977,7 @@ class TodoSwipeCard extends HTMLElement {
         ha-check-list-item.multiline .due {
           color: var(--todo-swipe-card-font-color-due-date, var(--secondary-text-color)) !important;
           font-size: var(--todo-swipe-card-font-size-due-date, var(--todo-swipe-card-typography-size-due-date, var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px)))) !important;
+          font-weight: var(--todo-swipe-card-font-weight-due-date, normal) !important;
           margin-top: var(--todo-swipe-card-due-date-margin-top, 4px) !important;
           line-height: var(--todo-swipe-card-line-height, 1.4) !important;
         }
