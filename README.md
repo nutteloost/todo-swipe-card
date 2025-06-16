@@ -250,8 +250,11 @@ card_mod:
 
 /* Typography and Layout */
 --todo-swipe-card-font-size:                            /* Base font size for todo items (default: 11px) */
+--todo-swipe-card-item-font-weight:                     /* Font weight for the main text of a todo item (e.g., normal, bold, 500) */
 --todo-swipe-card-font-size-due-date:                   /* Font size for due dates and associated icon (default: 11px) */
+--todo-swipe-card-font-weight-due-date:                 /* Font weight for the due date text */
 --todo-swipe-card-font-size-description:                /* Font size of the description text of todo items */
+--todo-swipe-card-font-weight-description:              /* Font weight for the description text of a todo item */
 --todo-swipe-card-font-color-description:               /* Color of the description text of todo items */
 --todo-swipe-card-font-color-due-date:                  /* Color of the due dates and associated icon */
 --todo-swipe-card-font-color-due-date-overdue:          /* Color of overdue due dates text and associated icon */
@@ -289,6 +292,8 @@ card_mod:
 --todo-swipe-card-checkbox-size:                         /* Size of checkbox elements (default: 20px) */
 
 /* Input Field Styling */
+--todo-swipe-card-input-font-weight:                     /* Font weight for the text typed into the 'Add item' field */
+--todo-swipe-card-placeholder-font-weight:               /* Font weight for the placeholder text in the 'Add item' field */
 --todo-swipe-card-placeholder-color:                     /* Color of 'Add item' text in input fields */
 --todo-swipe-card-placeholder-opacity:                   /* Opacity of 'Add item' text (default: 1) */
 
@@ -312,7 +317,6 @@ card_mod:
 --todo-swipe-card-delete-button-top:                     /* Manual positioning of delete button from top */
 --todo-swipe-card-delete-button-color:                   /* Color of the delete completed items button */
 --todo-swipe-card-add-button-color:                      /* Color of the add item button */
-```
 
 ### Styling Examples
 
