@@ -317,6 +317,7 @@ card_mod:
 --todo-swipe-card-delete-button-top:                     /* Manual positioning of delete button from top */
 --todo-swipe-card-delete-button-color:                   /* Color of the delete completed items button */
 --todo-swipe-card-add-button-color:                      /* Color of the add item button */
+```
 
 ### Styling Examples
 
