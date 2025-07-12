@@ -13,10 +13,103 @@
  */
 
 
-import { LitElement, html, css } from "https://unpkg.com/lit-element@2.5.1/lit-element.js?module";
+// Offline-compatible imports with fallback to Home Assistant's built-in dependencies
+let LitElement, html, css, fireEvent;
+
+// Try to import from HA's built-in modules first (for offline compatibility)
+try {
+    // Home Assistant has LitElement available globally in modern versions
+    if (window.customElements && window.customElements.get('ha-card')) {
+        // Use HA's built-in lit-element
+        const litModule = customElements.get('ha-card').__proto__.constructor.__proto__.constructor;
+        LitElement = litModule;
+        html = (window.lit?.html || window.LitElement?.html);
+        css = (window.lit?.css || window.LitElement?.css);
+    }
+} catch (e) {
+    console.debug('TodoSwipeCard: Could not use built-in LitElement, falling back to imports');
+}
+
+// Fallback to dynamic imports if built-in modules not available
+if (!LitElement || !html || !css) {
+    const loadDependencies = async () => {
+        try {
+            // Try multiple CDN sources for better reliability
+            const cdnSources = [
+                'https://cdn.jsdelivr.net/npm/lit-element@2.5.1/+esm',
+                'https://unpkg.com/lit-element@2.5.1/lit-element.js?module',
+                'https://cdn.skypack.dev/lit-element@2.5.1'
+            ];
+            
+            let litLoaded = false;
+            for (const source of cdnSources) {
+                try {
+                    const module = await import(source);
+                    LitElement = module.LitElement;
+                    html = module.html;
+                    css = module.css;
+                    litLoaded = true;
+                    break;
+                } catch (e) {
+                    console.warn(`TodoSwipeCard: Failed to load from ${source}:`, e);
+                }
+            }
+
+            if (!litLoaded) {
+                throw new Error('Could not load lit-element from any CDN source');
+            }
+        } catch (error) {
+            console.error('TodoSwipeCard: Failed to load LitElement dependencies:', error);
+            // Final fallback - create basic HTMLElement if all else fails
+            LitElement = HTMLElement;
+            html = (strings, ...values) => {
+                return strings.reduce((result, string, i) => {
+                    return result + string + (values[i] || '');
+                }, '');
+            };
+            css = (strings) => strings[0];
+        }
+    };
+    
+    // Only call loadDependencies if we're not in offline mode
+    try {
+        await loadDependencies();
+    } catch (e) {
+        // Offline mode detected, use fallbacks
+        LitElement = HTMLElement;
+        html = (strings, ...values) => {
+            return strings.reduce((result, string, i) => {
+                return result + string + (values[i] || '');
+            }, '');
+        };
+        css = (strings) => strings[0];
+    }
+}
+
+// Handle fireEvent with fallback
+try {
+    if (window.customCards && window.fireEvent) {
+        fireEvent = window.fireEvent;
+    } else {
+        // Import from external source as fallback
+        const helpersModule = await import("https://unpkg.com/custom-card-helpers@^1?module");
+        fireEvent = helpersModule.fireEvent;
+    }
+} catch (error) {
+    console.debug('TodoSwipeCard: Using fallback fireEvent implementation');
+    // Fallback fireEvent implementation
+    fireEvent = (node, type, detail = {}) => {
+        const event = new CustomEvent(type, {
+            detail,
+            bubbles: true,
+            composed: true
+        });
+        node.dispatchEvent(event);
+    };
+}
 
 // Version number
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 
 // Configurable debug mode - set to false for production
 const DEBUG = false;
@@ -35,10 +128,14 @@ const debugLog = (message, data) => {
  * TodoSwipeCard: A custom card for Home Assistant to display multiple todo lists with swipe navigation
  * @extends HTMLElement
  */
-class TodoSwipeCard extends HTMLElement {
+class TodoSwipeCard extends (LitElement || HTMLElement) {
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
+    
+    // Only manually attach shadow if not using LitElement
+    if (!this.shadowRoot && this.constructor === HTMLElement) {
+        this.attachShadow({ mode: 'open' });
+    }
     this._config = {};
     this._hass = null;
     this.cards = [];
@@ -57,6 +154,19 @@ class TodoSwipeCard extends HTMLElement {
     this._updateThrottle = null;
     this._lastHassUpdate = null;
     this._menuObserverTimeout = null;
+  }
+
+  /**
+   * Render method for LitElement compatibility
+   * @returns {TemplateResult|void} 
+   */
+  render() {
+      if (this.constructor === HTMLElement) {
+          // For HTMLElement fallback, we handle rendering manually in _build()
+          return;
+      }
+      // For LitElement, return empty template as we handle rendering manually
+      return html``;
   }
 
   /**
@@ -2615,7 +2725,7 @@ class TodoSwipeCard extends HTMLElement {
 /**
  * Updated TodoSwipeCardEditor with compact layout similar to simple-swipe-card
  */
-class TodoSwipeCardEditor extends LitElement {
+class TodoSwipeCardEditor extends (LitElement || HTMLElement) {
 
   static TodoSortMode = {
     NONE: 'none',
