@@ -198,7 +198,6 @@ entities:
 </details>
 
 
-
 ## Customizing and Theming
 > ⚠ **Important**: This card requires [card-mod](https://github.com/thomasloven/lovelace-card-mod) to be installed and working properly. Please note that since Todo Swipe Card applies internal card-mod styling for core functionality, some custom styling may conflict or behave unexpectedly. Test your customizations thoroughly and use CSS specificity or `!important` declarations when necessary.
 
