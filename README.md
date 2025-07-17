@@ -87,6 +87,7 @@ This card can be configured using the visual editor or YAML.
 | show_create | boolean | true | Show/hide the add item input field |
 | show_completed | boolean | false | Show/hide completed items |
 | show_completed_menu | boolean | false | Show/hide delete completed items button |
+| enable_search | boolean | false | Enable or disable search functionality |
 | delete_confirmation | boolean | false | Show confirmation dialog when deleting completed items |
 | card_spacing | number | 15 | Space between cards in pixels |
 
