@@ -1,7 +1,7 @@
 {
   "name": "Todo Swipe Card",
   "render_readme": true,
-  "filename": "todo-swipe-card.js",
-  "content_in_root": true,
-  "homeassistant": "2023.6.0"
+  "filename": "build/todo-swipe-card.js",
+  "content_in_root": false,
+  "homeassistant": "2023.11.0"
 }
