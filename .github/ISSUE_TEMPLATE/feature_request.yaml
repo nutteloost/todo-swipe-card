@@ -8,40 +8,53 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a new feature! Your input helps improve the Todo Swipe Card.
+        Thanks for taking the time to suggest a new feature! Your detailed input helps us improve.
+        Please provide as much information as possible by filling out the sections below.
 
   - type: textarea
     id: problem-description
     attributes:
-      label: "What problem does this solve?"
-      description: Describe the limitation or problem this feature would address.
-      placeholder: "I'm frustrated when..." or "It's currently difficult to..."
+      label: Is your feature request related to a problem? Please describe.
+      description: A clear and concise description of what the problem is. Ex. "I'm always frustrated when..." or "It's currently difficult to..."
+      placeholder: Describe the problem or limitation this feature would solve.
     validations:
       required: true
 
   - type: textarea
     id: proposed-solution
     attributes:
-      label: "Describe your proposed solution"
-      description: "How would this feature work? What would it look like?"
-      placeholder: "I would like to see an option to..." or "The card should allow users to..."
+      label: Describe the solution you'd like
+      description: A clear and concise description of what you want to happen. How would this feature work?
+      placeholder: e.g., "I would like to see a new option to..." or "The card should allow users to configure X by doing Y..."
     validations:
       required: true
 
   - type: textarea
     id: use-case
     attributes:
-      label: "Use case and benefits"
-      description: "How would you use this feature? Why is it valuable?"
-      placeholder: "This would help me..." or "In my dashboard, I need to..."
+      label: What is your use-case? Why is this feature important to you?
+      description: |
+        Explain how you would use this feature and why it's valuable.
+        Provide specific examples of scenarios where this feature would be beneficial.
+        This helps us understand the impact and prioritize requests.
+      placeholder: "As a user, I want to [action] so that [benefit/goal]. For example, when I am designing a complex dashboard, I need to [specific task] which this feature would enable by..."
     validations:
       required: true
 
   - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: Have you considered any alternative solutions or workarounds?
+      description: A clear and concise description of any alternative solutions or features you've considered or current workarounds you are using.
+      placeholder: e.g., "I've tried X, but it doesn't fully meet my needs because..." or "Currently, I have to do Y, which is cumbersome."
+    validations:
+      required: false
+
+  - type: textarea
     id: proposed-yaml
     attributes:
-      label: "Example Configuration (Optional)"
-      description: "How might the YAML configuration look for this feature?"
+      label: Proposed YAML Configuration (Optional)
+      description: If your feature involves configuration, please provide an example of how you imagine the YAML configuration might look.
       placeholder: |
         type: custom:todo-swipe-card
         entities:
@@ -55,27 +68,30 @@ body:
   - type: input
     id: card-version
     attributes:
-      label: "Todo Swipe Card Version"
-      description: "What version are you using? (e.g., v3.0.0 or latest)"
-      placeholder: "e.g., v3.0.0"
+      label: Todo Swipe Card Version
+      description: What version of the Todo Swipe Card are you using? (e.g., v3.0.0, latest)
+      placeholder: "e.g., v3.0.0 or latest"
     validations:
       required: true
 
   - type: textarea
-    id: alternatives-considered
+    id: additional-context
     attributes:
-      label: "Alternatives or workarounds"
-      description: "Have you tried any other solutions or workarounds?"
-      placeholder: "I've tried X, but it doesn't work because..." (Optional)
+      label: Additional Context
+      description: Add any other context, screenshots or links about the feature request here.
+      placeholder: Drag and drop images or paste links.
     validations:
       required: false
 
   - type: checkboxes
     id: checklist
     attributes:
-      label: "Pre-Submission Checklist"
+      label: Pre-Submission Checklist
+      description: Please verify the following before submitting.
       options:
-        - label: "I have searched existing [issues](https://github.com/nutteloost/todo-swipe-card/issues) to ensure this feature hasn't been requested."
+        - label: I have searched the existing [issues](https://github.com/nutteloost/todo-swipe-card/issues) to ensure this feature has not already been requested.
           required: true
-        - label: "I have provided a clear explanation of the feature and its benefits."
+        - label: I have provided a clear and detailed explanation of the feature.
+          required: true
+        - label: I have described my use-case and the benefits of this feature.
           required: true
