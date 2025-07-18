@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Community Discussion
+    url: https://community.home-assistant.io/t/todo-swipe-card-stylish-swipeable-todo-lists/888627
+    about: Ask questions and discuss the card with other users in the Home Assistant Community Forum
+  - name: 📖 Documentation
+    url: https://github.com/nutteloost/todo-swipe-card#readme
+    about: Read the full documentation and examples
