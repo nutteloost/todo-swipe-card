@@ -1,7 +1,7 @@
 name: ✨ Feature Request
 description: Suggest a new feature or improvement for the Todo Swipe Card
 title: "[FEATURE]: A brief, descriptive title for your feature request"
-labels: ["enhancement"]
+labels: ["under review"]
 assignees:
   - nutteloost
 body:
