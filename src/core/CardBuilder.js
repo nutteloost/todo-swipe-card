@@ -76,17 +76,44 @@ export class CardBuilder {
   async createNativeTodoCards() {
     // Ensure sliderElement exists before proceeding
     if (!this.cardInstance.sliderElement) {
-      console.error('sliderElement is null, cannot create cards');
+      debugLog('sliderElement is null at start of createNativeTodoCards');
       return;
     }
 
+    // Check for build cancellation
+    if (this.cardInstance._buildCanceled) {
+      debugLog('Card creation canceled before starting');
+      return;
+    }
+
+    // Store reference to slider element to check for changes
+    const initialSlider = this.cardInstance.sliderElement;
+
     // Process entities sequentially for better performance
     for (let i = 0; i < this._config.entities.length; i++) {
+      // Check for cancellation at each iteration
+      if (this.cardInstance._buildCanceled) {
+        debugLog('Card creation canceled during processing');
+        return;
+      }
+
       const entityConfig = this._config.entities[i];
       const entityId = this._getEntityId(entityConfig);
 
       if (!entityId || entityId.trim() === '') {
         continue;
+      }
+
+      // Check if slider element is still the same (hasn't been rebuilt)
+      if (this.cardInstance.sliderElement !== initialSlider) {
+        debugLog('sliderElement changed during card creation - build was interrupted');
+        return;
+      }
+
+      // Check if slider element still exists
+      if (!this.cardInstance.sliderElement) {
+        debugLog('sliderElement became null during card creation');
+        return;
       }
 
       const slideDiv = document.createElement('div');
@@ -95,6 +122,12 @@ export class CardBuilder {
       try {
         // Create native todo card element
         const cardElement = await this.createNativeTodoCard(entityConfig);
+
+        // Check for cancellation after async operation
+        if (this.cardInstance._buildCanceled) {
+          debugLog('Card creation canceled after creating card element');
+          return;
+        }
 
         // Store reference to the card
         this.cardInstance.cards[i] = {
@@ -119,33 +152,42 @@ export class CardBuilder {
           slideDiv.appendChild(iconElement);
         }
 
-        // Double-check sliderElement still exists before appending
-        if (this.cardInstance.sliderElement) {
+        // Final check before appending - ensure slider still exists and is the same
+        if (
+          this.cardInstance.sliderElement &&
+          this.cardInstance.sliderElement === initialSlider &&
+          !this.cardInstance._buildCanceled
+        ) {
           this.cardInstance.sliderElement.appendChild(slideDiv);
+          debugLog(`Created native todo card for entity: ${entityId}`);
         } else {
-          console.error('sliderElement became null during card creation');
-          break;
+          debugLog('sliderElement changed, became null, or build canceled before appending slide');
+          return;
         }
-
-        debugLog(`Created native todo card for entity: ${entityId}`);
       } catch (e) {
-        console.error(`Error creating native todo card ${i}:`, entityId, e);
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText =
-          'color: red; background: white; padding: 16px; border: 1px solid red; height: 100%; box-sizing: border-box;';
-        errorDiv.textContent = `Error creating card: ${e.message || e}. Check console for details.`;
-        slideDiv.appendChild(errorDiv);
+        if (!this.cardInstance._buildCanceled) {
+          console.error(`Error creating native todo card ${i}:`, entityId, e);
+          const errorDiv = document.createElement('div');
+          errorDiv.style.cssText =
+            'color: red; background: white; padding: 16px; border: 1px solid red; height: 100%; box-sizing: border-box;';
+          errorDiv.textContent = `Error creating card: ${e.message || e}. Check console for details.`;
+          slideDiv.appendChild(errorDiv);
 
-        // Check if sliderElement exists before appending error
-        if (this.cardInstance.sliderElement) {
-          this.cardInstance.sliderElement.appendChild(slideDiv);
+          // Check if sliderElement exists before appending error
+          if (
+            this.cardInstance.sliderElement &&
+            this.cardInstance.sliderElement === initialSlider
+          ) {
+            this.cardInstance.sliderElement.appendChild(slideDiv);
+          }
+          this.cardInstance.cards[i] = { error: true, slide: slideDiv };
         }
-        this.cardInstance.cards[i] = { error: true, slide: slideDiv };
       }
     }
 
     // Filter out any potential gaps if errors occurred
     this.cardInstance.cards = this.cardInstance.cards.filter(Boolean);
+    debugLog(`Card creation completed. Created ${this.cardInstance.cards.length} cards`);
   }
 
   /**
@@ -300,8 +342,40 @@ export class CardBuilder {
       addButton.addEventListener('click', () => {
         const value = input.value.trim();
         if (value) {
-          this.cardInstance._addTodoItem(entityId, value);
-          input.value = '';
+          // Check if this is search mode - same logic as Enter key
+          if (this._config.enable_search) {
+            // CLEAR SEARCH STATE FIRST - before doing anything else
+            debugLog(`Clearing search state for ${entityId} BEFORE adding item (+ button)`);
+            this.cardInstance._searchStates.delete(entityId);
+            this.cardInstance._currentSearchText = '';
+            input.value = '';
+
+            // Check if the search text matches any existing items
+            const entityState = this.cardInstance._hass?.states?.[entityId];
+            const items = entityState?.attributes?.items || [];
+            const exactMatch = items.some(
+              (item) => item.summary.toLowerCase() === value.toLowerCase()
+            );
+
+            if (!exactMatch) {
+              debugLog(`No exact match found, adding item: "${value}" (+ button)`);
+              // Add new item since no exact match found
+              this.cardInstance._addTodoItem(entityId, value);
+            } else {
+              debugLog(`Exact match found, not adding item: "${value}" (+ button)`);
+            }
+
+            // Update the card to clear search display
+            const cardElement =
+              input.closest('.native-todo-card') || input.closest('.todo-card-with-title-wrapper');
+            if (cardElement) {
+              this.updateNativeTodoCard(cardElement, entityId);
+            }
+          } else {
+            // Non-search mode - just add the item (original behavior)
+            this.cardInstance._addTodoItem(entityId, value);
+            input.value = '';
+          }
           input.focus();
         }
       });
@@ -383,15 +457,18 @@ export class CardBuilder {
       }
     }
 
-    // Apply sorting and filtering
+    // Apply sorting (always use ALL items for search purposes)
     const entityConfig = this._getEntityConfig(entityId);
-    const sortedItems = sortTodoItems(items, entityConfig?.display_order, this._hass);
+    const allSortedItems = sortTodoItems(items, entityConfig?.display_order, this._hass);
     const searchText = this.cardInstance._searchStates.get(entityId) || '';
+    const isSearchActive = searchText && searchText.trim() !== '';
+
     debugLog(`Search text for filtering: "${searchText}"`);
-    const filteredItems =
-      searchText && searchText.trim() !== ''
-        ? sortedItems.filter((item) => matchesSearch(item, searchText))
-        : sortedItems;
+
+    // Filter by search text (if searching, include ALL matching items regardless of completion status)
+    const filteredItems = isSearchActive
+      ? allSortedItems.filter((item) => matchesSearch(item, searchText))
+      : allSortedItems;
 
     debugLog(
       `Rendering ${filteredItems.length} items for ${entityId} (from ${items.length} total)`
@@ -408,11 +485,11 @@ export class CardBuilder {
             entityId,
             this.cardInstance._toggleTodoItem,
             this.cardInstance._editTodoItem,
-            this._hass // Add hass parameter
+            this._hass
           );
 
-          // Apply visibility based on config
-          if (!this._config.show_completed && item.status === 'completed') {
+          // Show completed items when actively searching, otherwise respect show_completed setting
+          if (!this._config.show_completed && item.status === 'completed' && !isSearchActive) {
             itemElement.style.display = 'none';
           }
 
@@ -429,7 +506,7 @@ export class CardBuilder {
       entityId,
       searchText,
       filteredItems.length,
-      sortedItems.length
+      allSortedItems.length
     );
 
     debugLog(`Finished updating card for ${entityId}`);

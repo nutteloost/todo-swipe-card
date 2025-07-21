@@ -522,7 +522,7 @@ export function createBaseStyles(config) {
     }
 
     .todo-item.completed {
-      display: ${config?.show_completed ? 'flex' : 'none'};
+      display: flex;
     }
 
     .todo-card-with-title-wrapper {

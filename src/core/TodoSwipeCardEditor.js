@@ -792,14 +792,6 @@ export class TodoSwipeCardEditor extends (LitElement || HTMLElement) {
 
     return html`
       <div class="card-config">
-        <div class="info-panel">
-          <div class="info-icon">i</div>
-          <div class="info-text">
-            Native implementation - no card-mod dependency required! Click the arrow button next to
-            each todo list to expand and configure entity selection and sorting options.
-          </div>
-        </div>
-
         <!-- Todo Lists Section -->
         <div class="section">
           <div class="section-header">Todo Lists</div>
