@@ -12,16 +12,12 @@ import { addTodoItem, toggleTodoItem, deleteCompletedItems } from '../features/T
 
 /**
  * TodoSwipeCard: A custom card for Home Assistant to display multiple todo lists with swipe navigation
- * @extends HTMLElement
+ * @extends LitElement
  */
-export class TodoSwipeCard extends (LitElement || HTMLElement) {
+export class TodoSwipeCard extends LitElement {
   constructor() {
     super();
 
-    // Only manually attach shadow if not using LitElement
-    if (!this.shadowRoot && this.constructor === HTMLElement) {
-      this.attachShadow({ mode: 'open' });
-    }
     this._config = {};
     this._hass = null;
     this.cards = [];
@@ -68,10 +64,6 @@ export class TodoSwipeCard extends (LitElement || HTMLElement) {
    * @returns {TemplateResult|void}
    */
   render() {
-    if (this.constructor === HTMLElement) {
-      // For HTMLElement fallback, we handle rendering manually in _build()
-      return;
-    }
     // For LitElement, return empty template as we handle rendering manually
     return html``;
   }
@@ -563,6 +555,11 @@ export class TodoSwipeCard extends (LitElement || HTMLElement) {
    * Called when the element is connected to the DOM
    */
   connectedCallback() {
+    super.connectedCallback();
+    
+    // Setup event listeners through subscription manager
+    this.subscriptionManager.setupEventListeners();
+    
     // Ensure we have a valid config before proceeding
     if (!this._config) {
       debugLog('TodoSwipeCard connected but no config available');
@@ -571,12 +568,13 @@ export class TodoSwipeCard extends (LitElement || HTMLElement) {
 
     if (!this.initialized) {
       debugLog('TodoSwipeCard connecting and building');
-      this._applyCardModStyles(); // Apply styles first for transitions
-      this._build();
+      this._applyCardModStyles();
+      
+      // Small delay to ensure renderRoot is ready
+      setTimeout(() => {
+        this._build();
+      }, 0);
     }
-
-    // Setup event listeners through subscription manager
-    this.subscriptionManager.setupEventListeners();
   }
 
   /**
@@ -673,7 +671,11 @@ export class TodoSwipeCard extends (LitElement || HTMLElement) {
 
     // Use document fragment for better performance
     const fragment = document.createDocumentFragment();
-    const root = this.shadowRoot;
+    const root = this.renderRoot || this.shadowRoot;
+    if (!root) {
+      console.error('No render root available');
+      return;
+    }
     root.innerHTML = ''; // Clear previous content
 
     // Add base styles
@@ -881,6 +883,11 @@ export class TodoSwipeCard extends (LitElement || HTMLElement) {
 
     // Batch all DOM updates
     requestAnimationFrame(() => {
+      // Re-check if elements still exist inside requestAnimationFrame
+      if (!this.sliderElement || !this.cardContainer || !this.initialized) {
+        return;
+      }
+
       // Use stored transition values if available, otherwise default
       const transitionSpeed = this._transitionSpeed || '0.3s';
       const transitionEasing = this._transitionEasing || 'ease-out';

@@ -1,6 +1,6 @@
 {
   "name": "todo-swipe-card",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "A specialized swipe card for todo lists in Home Assistant",
   "main": "build/todo-swipe-card.js",
   "type": "module",
@@ -32,6 +32,9 @@
     "clean": "rimraf build/*.js *.map",
     "test:build": "npm run deploy:prod && echo '✅ Production build test passed'"
   },
+  "dependencies": {
+    "lit": "^3.0.0"
+  },  
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.0.0",
     "@rollup/plugin-terser": "^0.4.4",

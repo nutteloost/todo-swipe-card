@@ -6,7 +6,7 @@ import { VERSION, TodoSortMode } from '../utils/Constants.js';
 /**
  * Updated TodoSwipeCardEditor with compact layout similar to simple-swipe-card
  */
-export class TodoSwipeCardEditor extends (LitElement || HTMLElement) {
+export class TodoSwipeCardEditor extends LitElement {
   static get properties() {
     return {
       hass: { type: Object },

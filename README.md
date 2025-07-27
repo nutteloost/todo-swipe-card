@@ -66,7 +66,6 @@ The Todo Swipe Card includes a visual editor that appears when you add or edit t
 - Display order setting of todo list items per list
 - Display options for completed items, add buttons, and more
 - Real-time preview of changes
-- Auto-Migration button for deprecated configurations
 
 #### Search for 'Todo Swipe Card'
 <img src="https://raw.githubusercontent.com/nutteloost/todo-swipe-card/main/images/visual_editor_search.png" width="250">
