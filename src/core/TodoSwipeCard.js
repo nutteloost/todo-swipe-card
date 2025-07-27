@@ -556,10 +556,10 @@ export class TodoSwipeCard extends LitElement {
    */
   connectedCallback() {
     super.connectedCallback();
-    
+
     // Setup event listeners through subscription manager
     this.subscriptionManager.setupEventListeners();
-    
+
     // Ensure we have a valid config before proceeding
     if (!this._config) {
       debugLog('TodoSwipeCard connected but no config available');
@@ -569,7 +569,7 @@ export class TodoSwipeCard extends LitElement {
     if (!this.initialized) {
       debugLog('TodoSwipeCard connecting and building');
       this._applyCardModStyles();
-      
+
       // Small delay to ensure renderRoot is ready
       setTimeout(() => {
         this._build();

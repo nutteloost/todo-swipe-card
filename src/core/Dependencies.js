@@ -5,17 +5,17 @@
  * No dynamic imports, no runtime detection - just simple, reliable imports.
  */
 
-import { debugLog } from "../utils/Debug.js";
+import { debugLog } from '../utils/Debug.js';
 
 // Static imports - Rollup will bundle these into the final file
-import { LitElement, html, css } from "lit";
+import { LitElement, html, css } from 'lit';
 
 // Simple fireEvent implementation (no external dependencies)
 export const fireEvent = (node, type, detail = {}) => {
   const event = new CustomEvent(type, {
     detail,
     bubbles: true,
-    composed: true,
+    composed: true
   });
   node.dispatchEvent(event);
 };
@@ -25,7 +25,7 @@ export const fireEvent = (node, type, detail = {}) => {
  * @returns {Promise<boolean>} True when dependencies are ready
  */
 export async function ensureDependencies() {
-  debugLog("SYSTEM", "Using bundled LitElement dependencies");
+  debugLog('SYSTEM', 'Using bundled LitElement dependencies');
   return true;
 }
 
@@ -35,7 +35,7 @@ export async function ensureDependencies() {
  */
 export function getHelpers() {
   // Try HA's built-in card helpers first
-  if (window.loadCardHelpers && typeof window.loadCardHelpers === "function") {
+  if (window.loadCardHelpers && typeof window.loadCardHelpers === 'function') {
     return window.loadCardHelpers();
   }
 
@@ -44,11 +44,7 @@ export function getHelpers() {
     createCardElement: async (config) => {
       try {
         // Try to create custom cards
-        if (
-          config.type &&
-          window.customElements &&
-          window.customElements.get(config.type)
-        ) {
+        if (config.type && window.customElements && window.customElements.get(config.type)) {
           const element = document.createElement(config.type);
           if (element.setConfig) {
             element.setConfig(config);
@@ -57,7 +53,7 @@ export function getHelpers() {
         }
 
         // Try built-in cards with hui- prefix
-        if (config.type && !config.type.startsWith("custom:")) {
+        if (config.type && !config.type.startsWith('custom:')) {
           const huiType = `hui-${config.type}-card`;
           if (window.customElements && window.customElements.get(huiType)) {
             const element = document.createElement(config.type);
@@ -69,7 +65,7 @@ export function getHelpers() {
         }
 
         // Simple placeholder for unknown cards
-        const element = document.createElement("div");
+        const element = document.createElement('div');
         element.innerHTML = `
           <ha-card>
             <div style="padding: 16px; text-align: center; color: var(--secondary-text-color);">
@@ -82,7 +78,7 @@ export function getHelpers() {
         return element.firstElementChild;
       } catch (error) {
         // Error card
-        const element = document.createElement("div");
+        const element = document.createElement('div');
         element.innerHTML = `
           <ha-card>
             <div style="padding: 16px; text-align: center; color: var(--error-color, #f44336);">
@@ -98,7 +94,7 @@ export function getHelpers() {
     },
 
     createErrorCardElement: (config, error) => {
-      const element = document.createElement("div");
+      const element = document.createElement('div');
       element.innerHTML = `
         <ha-card>
           <div style="padding: 16px; text-align: center; color: var(--error-color, #f44336);">
@@ -110,7 +106,7 @@ export function getHelpers() {
         </ha-card>
       `;
       return element.firstElementChild;
-    },
+    }
   });
 }
 
