@@ -438,12 +438,23 @@ export class DialogManager {
         }
       }
 
-      const success = await this.handleDialogSave(entityId, item, {
+      // Build data object conditionally based on entity support
+      const data = {
         summary: summary,
-        description: descriptionField?.value,
-        completed: checkbox?.checked || false,
-        dueDate: dueValue
-      });
+        completed: checkbox?.checked || false
+      };
+
+      // Only include description if entity supports it
+      if (supportsDescription) {
+        data.description = descriptionField?.value;
+      }
+
+      // Only include dueDate if entity supports it
+      if (supportsDueDate) {
+        data.dueDate = dueValue;
+      }
+
+      const success = await this.handleDialogSave(entityId, item, data);
 
       if (success) {
         this.closeDialog(dialog);
@@ -476,12 +487,23 @@ export class DialogManager {
             }
           }
 
-          this.handleDialogSave(entityId, item, {
+          // Build data object conditionally based on entity support
+          const data = {
             summary: summary,
-            description: descriptionField?.value,
-            completed: checkbox?.checked || false,
-            dueDate: dueValue
-          }).then((success) => {
+            completed: checkbox?.checked || false
+          };
+
+          // Only include description if entity supports it
+          if (supportsDescription) {
+            data.description = descriptionField?.value;
+          }
+
+          // Only include dueDate if entity supports it
+          if (supportsDueDate) {
+            data.dueDate = dueValue;
+          }
+
+          this.handleDialogSave(entityId, item, data).then((success) => {
             if (success) this.closeDialog(dialog);
           });
         }

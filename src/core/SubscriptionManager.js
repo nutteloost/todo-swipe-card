@@ -128,13 +128,16 @@ export class SubscriptionManager {
 
     // Clean up todo subscriptions
     if (this.cardInstance._todoSubscriptions) {
-      this.cardInstance._todoSubscriptions.forEach((unsubscribe, entityId) => {
+      this.cardInstance._todoSubscriptions.forEach(async (unsubscribe, entityId) => {
         try {
           if (typeof unsubscribe === 'function') {
-            unsubscribe();
+            await Promise.resolve(unsubscribe()).catch((error) => {
+              // Silently handle subscription cleanup errors
+              debugLog(`Subscription cleanup error for ${entityId}:`, error);
+            });
           }
         } catch (e) {
-          console.warn(`Error unsubscribing from todo entity ${entityId}:`, e);
+          debugLog(`Error unsubscribing from todo entity ${entityId}:`, e);
         }
       });
       this.cardInstance._todoSubscriptions.clear();
