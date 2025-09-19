@@ -1,8 +1,8 @@
 // Version number
-export const VERSION = '3.2.1';
+export const VERSION = '3.2.2';
 
 // Configurable debug mode - set to false for production
-export const DEBUG = false;
+export const DEBUG = true;
 
 // Todo sorting modes for display order configuration
 export const TodoSortMode = {

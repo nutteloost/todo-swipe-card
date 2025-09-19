@@ -36,6 +36,80 @@ export class DialogManager {
   }
 
   /**
+   * Create a custom delete button that looks like ha-button but is fully styleable
+   * @param {string} text - Button text
+   * @param {string} slot - Button slot
+   * @returns {HTMLElement} Custom delete button
+   * @private
+   */
+  _createCustomDeleteButton(text, slot) {
+    const button = document.createElement('button');
+    button.slot = slot;
+    button.textContent = text;
+    button.setAttribute('destructive', '');
+
+    // Style it to look like ha-button but with red color
+    button.style.cssText = `
+      background-color: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 16px;
+      font-family: var(--mdc-typography-button-font-family, inherit);
+      font-size: var(--mdc-typography-button-font-size, 0.875rem);
+      font-weight: var(--mdc-typography-button-font-weight, 500);
+      text-transform: uppercase;
+      letter-spacing: 0.0892857143em;
+      cursor: pointer;
+      min-width: 64px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      transition: background-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    `;
+
+    // Add hover and focus effects
+    button.addEventListener('mouseenter', () => {
+      button.style.backgroundColor = '#d32f2f';
+      button.style.boxShadow = '0px 2px 4px rgba(244, 67, 54, 0.3)';
+    });
+
+    button.addEventListener('mouseleave', () => {
+      button.style.backgroundColor = '#f44336';
+      button.style.boxShadow = 'none';
+    });
+
+    button.addEventListener('focus', () => {
+      button.style.backgroundColor = '#d32f2f';
+      button.style.boxShadow = '0px 0px 0px 2px rgba(244, 67, 54, 0.3)';
+    });
+
+    button.addEventListener('blur', () => {
+      button.style.backgroundColor = '#f44336';
+      button.style.boxShadow = 'none';
+    });
+
+    return button;
+  }
+
+  /**
+   * Create a regular button that matches ha-button styling
+   * @param {string} text - Button text
+   * @param {string} slot - Button slot
+   * @returns {HTMLElement} Regular button
+   * @private
+   */
+  _createRegularButton(text, slot) {
+    const button = document.createElement('ha-button');
+    button.slot = slot;
+    button.textContent = text;
+    return button;
+  }
+
+  /**
    * Edit todo item using a custom HA-style dialog
    * @param {string} entityId - Entity ID
    * @param {Object} item - Todo item
@@ -353,7 +427,7 @@ export class DialogManager {
     // Add focus trap for better accessibility
     const setupFocusTrap = () => {
       const focusableElements = dialog.querySelectorAll(
-        'ha-textfield, ha-checkbox, input, button, mwc-button'
+        'ha-textfield, ha-checkbox, input, button, ha-button'
       );
       if (focusableElements.length === 0) return;
 
@@ -380,12 +454,7 @@ export class DialogManager {
 
     // Delete button (if item exists and supports delete)
     if (item && supportsDelete) {
-      const deleteButton = document.createElement('mwc-button');
-      deleteButton.slot = 'secondaryAction';
-      deleteButton.textContent = 'Delete item';
-      deleteButton.style.setProperty('--mdc-theme-primary', 'var(--error-color)');
-      deleteButton.style.setProperty('--mdc-button-ink-color', 'var(--error-color)');
-      deleteButton.style.color = 'var(--error-color)';
+      const deleteButton = this._createCustomDeleteButton('Delete item', 'secondaryAction');
 
       deleteButton.addEventListener('click', async () => {
         const confirmed = await this.showDeleteConfirmationDialog(item.summary);
@@ -399,9 +468,7 @@ export class DialogManager {
     }
 
     // Cancel button
-    const cancelButton = document.createElement('mwc-button');
-    cancelButton.slot = 'primaryAction';
-    cancelButton.textContent = 'Cancel';
+    const cancelButton = this._createRegularButton('Cancel', 'primaryAction');
     cancelButton.addEventListener('click', () => {
       this.closeDialog(dialog);
     });
@@ -409,9 +476,7 @@ export class DialogManager {
 
     // Save button
     const saveText = item ? 'Save item' : 'Add';
-    const saveButton = document.createElement('mwc-button');
-    saveButton.slot = 'primaryAction';
-    saveButton.textContent = saveText;
+    const saveButton = this._createRegularButton(saveText, 'primaryAction');
     saveButton.addEventListener('click', async () => {
       const summary = summaryField.value.trim();
       if (!summary) {
@@ -602,25 +667,22 @@ export class DialogManager {
       content.textContent = `Are you sure you want to delete "${itemSummary}"?`;
       confirmDialog.appendChild(content);
 
-      const confirmButton = document.createElement('mwc-button');
-      confirmButton.slot = 'primaryAction';
-      confirmButton.textContent = 'Delete';
-      confirmButton.style.color = 'var(--error-color)';
-      confirmButton.addEventListener('click', () => {
-        confirmDialog.close();
-        resolve(true);
-      });
-
-      const cancelButton = document.createElement('mwc-button');
-      cancelButton.slot = 'secondaryAction';
-      cancelButton.textContent = 'Cancel';
+      // Cancel button first (secondary action)
+      const cancelButton = this._createRegularButton('Cancel', 'secondaryAction');
       cancelButton.addEventListener('click', () => {
         confirmDialog.close();
         resolve(false);
       });
 
-      confirmDialog.appendChild(confirmButton);
+      // Delete button with red styling
+      const confirmButton = this._createCustomDeleteButton('Delete', 'primaryAction');
+      confirmButton.addEventListener('click', () => {
+        confirmDialog.close();
+        resolve(true);
+      });
+
       confirmDialog.appendChild(cancelButton);
+      confirmDialog.appendChild(confirmButton);
 
       confirmDialog.addEventListener('closed', () => {
         if (confirmDialog.parentNode) {
@@ -645,39 +707,29 @@ export class DialogManager {
 
     // Create content container
     const content = document.createElement('div');
-    content.innerText = 'Are you sure you want to delete all completed items from the list?';
+    content.style.padding = '16px';
+    content.textContent = 'Are you sure you want to delete all completed items from the list?';
     dialog.appendChild(content);
 
-    // Create confirm button
-    const confirmButton = document.createElement('mwc-button');
-    confirmButton.slot = 'primaryAction';
-    confirmButton.label = 'Confirm';
-    confirmButton.style.color = 'var(--primary-color)';
-    confirmButton.setAttribute('aria-label', 'Confirm');
+    // Create cancel button first (secondary action)
+    const cancelButton = this._createRegularButton('Cancel', 'secondaryAction');
+    cancelButton.addEventListener('click', () => {
+      dialog.close();
+    });
 
-    // Add confirm button click handler
+    // Create confirm button with red styling
+    const confirmButton = this._createCustomDeleteButton('Delete', 'primaryAction');
     confirmButton.addEventListener('click', () => {
-      this.closeDialog(dialog);
+      dialog.close();
       // Import deleteCompletedItems here to avoid circular dependency
       import('../features/TodoOperations.js').then((module) => {
         module.deleteCompletedItems(entityId, this._hass);
       });
     });
 
-    // Create cancel button
-    const cancelButton = document.createElement('mwc-button');
-    cancelButton.slot = 'secondaryAction';
-    cancelButton.label = 'Cancel';
-    cancelButton.setAttribute('aria-label', 'Cancel');
-
-    // Add cancel button click handler
-    cancelButton.addEventListener('click', () => {
-      this.closeDialog(dialog);
-    });
-
     // Append buttons to dialog
-    dialog.appendChild(confirmButton);
     dialog.appendChild(cancelButton);
+    dialog.appendChild(confirmButton);
 
     // Handle dialog close
     dialog.addEventListener('closed', () => {
