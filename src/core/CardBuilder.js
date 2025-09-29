@@ -9,7 +9,8 @@ import {
   subscribeToTodoItems,
   fetchTodoItems,
   sortTodoItems,
-  createTodoItemElement
+  createTodoItemElement,
+  entitySupportsFeature
 } from '../features/TodoOperations.js';
 
 /**
@@ -485,7 +486,8 @@ export class CardBuilder {
             entityId,
             this.cardInstance._toggleTodoItem,
             this.cardInstance._editTodoItem,
-            this._hass
+            this._hass,
+            entityState
           );
 
           // Show completed items when actively searching, otherwise respect show_completed setting
@@ -510,6 +512,14 @@ export class CardBuilder {
     );
 
     debugLog(`Finished updating card for ${entityId}`);
+
+    // Setup drag and drop if entity supports it
+    if (entitySupportsFeature(entityState, 8)) {
+      // Import drag and drop functionality
+      const { setupDragAndDrop } = await import('../features/DragDrop.js');
+      setupDragAndDrop(listContainer, entityId, filteredItems, this._hass);
+      debugLog(`Drag and drop enabled for ${entityId}`);
+    }
   }
 
   /**

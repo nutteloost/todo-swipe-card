@@ -575,6 +575,25 @@ export function createBaseStyles(config) {
       font-style: italic;
       text-align: left;
     }
+
+  /* Drag and drop styles - minimal visual feedback */
+    .todo-item[data-supports-drag="true"] {
+      cursor: grab;
+    }
+
+    .todo-item.dragging {
+      opacity: 0.5;
+      cursor: grabbing;
+      z-index: 1000;
+    }
+
+    .todo-item.drag-over-top {
+      border-top: 2px solid var(--primary-color);
+    }
+
+    .todo-item.drag-over-bottom {
+      border-bottom: 2px solid var(--primary-color);
+    }
   `;
 
   return style;

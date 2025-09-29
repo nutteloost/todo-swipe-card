@@ -310,11 +310,20 @@ function parseDueDateForSort(due) {
  * @param {Function} toggleCallback - Callback for toggle action
  * @param {Function} editCallback - Callback for edit action
  * @param {Object} hass - Home Assistant object (needed for ha-relative-time)
+ * @param {Object} entityState - Entity state object (for feature detection)
  * @returns {HTMLElement} Todo item element
  */
-export function createTodoItemElement(item, entityId, toggleCallback, editCallback, hass) {
+export function createTodoItemElement(
+  item,
+  entityId,
+  toggleCallback,
+  editCallback,
+  hass,
+  entityState
+) {
   const itemElement = document.createElement('div');
   itemElement.className = `todo-item ${item.status === 'completed' ? 'completed' : ''}`;
+  itemElement.dataset.itemUid = item.uid; // Store UID for drag and drop
 
   // Create checkbox
   const checkbox = document.createElement('ha-checkbox');
@@ -360,6 +369,11 @@ export function createTodoItemElement(item, entityId, toggleCallback, editCallba
 
   itemElement.appendChild(content);
 
+  // Make entire item draggable if entity supports move feature (no visible handle)
+  if (entityState && entitySupportsFeature(entityState, 8)) {
+    itemElement.setAttribute('data-supports-drag', 'true');
+  }
+
   // Simplified and more reliable click handler
   let startX = 0;
   let startY = 0;
@@ -367,8 +381,12 @@ export function createTodoItemElement(item, entityId, toggleCallback, editCallba
   let moved = false;
 
   const handleStart = (e) => {
-    // Don't handle clicks on the checkbox
-    if (e.target === checkbox || checkbox.contains(e.target)) {
+    // Don't handle clicks on the checkbox or drag handle
+    if (
+      e.target === checkbox ||
+      checkbox.contains(e.target) ||
+      e.target.closest('.todo-drag-handle')
+    ) {
       return;
     }
 
@@ -407,8 +425,12 @@ export function createTodoItemElement(item, entityId, toggleCallback, editCallba
   };
 
   const handleEnd = (e) => {
-    // Don't handle clicks on the checkbox
-    if (e.target === checkbox || checkbox.contains(e.target)) {
+    // Don't handle clicks on the checkbox or drag handle
+    if (
+      e.target === checkbox ||
+      checkbox.contains(e.target) ||
+      e.target.closest('.todo-drag-handle')
+    ) {
       return;
     }
 
@@ -433,8 +455,12 @@ export function createTodoItemElement(item, entityId, toggleCallback, editCallba
 
   // Fallback click handler for better reliability
   itemElement.addEventListener('click', (e) => {
-    // Don't handle clicks on the checkbox
-    if (e.target === checkbox || checkbox.contains(e.target)) {
+    // Don't handle clicks on the checkbox or drag handle
+    if (
+      e.target === checkbox ||
+      checkbox.contains(e.target) ||
+      e.target.closest('.todo-drag-handle')
+    ) {
       return;
     }
 
@@ -458,4 +484,35 @@ export function createTodoItemElement(item, entityId, toggleCallback, editCallba
 export function entitySupportsFeature(entityState, feature) {
   const supportedFeatures = entityState.attributes?.supported_features || 0;
   return (supportedFeatures & feature) !== 0;
+}
+
+/**
+ * Move a todo item to a new position
+ * @param {string} entityId - Entity ID
+ * @param {string} itemUid - UID of item to move
+ * @param {string|null} previousUid - UID of item that should come before it (null for first position)
+ * @param {Object} hass - Home Assistant object
+ * @returns {Promise<void>}
+ */
+export async function moveItem(entityId, itemUid, previousUid, hass) {
+  if (!hass) {
+    debugLog('No hass object available for moveItem');
+    return;
+  }
+
+  try {
+    debugLog(`Moving item ${itemUid} after ${previousUid || 'start'} in ${entityId}`);
+
+    await hass.callWS({
+      type: 'todo/item/move',
+      entity_id: entityId,
+      uid: itemUid,
+      previous_uid: previousUid || undefined
+    });
+
+    debugLog(`Successfully moved item ${itemUid}`);
+  } catch (error) {
+    console.error('Error moving todo item:', error);
+    debugLog(`Failed to move item: ${error.message}`);
+  }
 }

@@ -12,6 +12,7 @@ export default {
   output: {
     file: 'build/todo-swipe-card.js',
     format: 'es',
+    inlineDynamicImports: true, // ADD THIS LINE - bundles everything into a single file
     sourcemap: process.env.SOURCEMAP === 'true' // Only create maps when explicitly requested
   },
   plugins: [
