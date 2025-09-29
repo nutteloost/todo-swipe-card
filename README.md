@@ -20,6 +20,7 @@ Todo Swipe Card is a customizable container card for Home Assistant specifically
 - Configurable card spacing
 - Options to show/hide completed items
 - Delete completed items button with optional confirmation dialog
+- Drag-and-drop reordering (for supported integrations)
 - Visual editor support
 
 ## Requirements

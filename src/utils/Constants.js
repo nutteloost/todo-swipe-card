@@ -1,5 +1,5 @@
 // Version number
-export const VERSION = '3.3.0';
+export const VERSION = '3.3.1';
 
 // Configurable debug mode - set to false for production
 export const DEBUG = true;
