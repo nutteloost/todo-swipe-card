@@ -80,27 +80,27 @@ This card can be configured using the visual editor or YAML.
 ### Options
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| entities | list | Required | List of todo entities to display |
-| show_pagination | boolean | true | Show/hide pagination dots |
-| show_icons | boolean | false | Show/hide icons for each todo list |
-| show_addbutton | boolean | false | Show/hide the "+" button next to the add field |
-| show_create | boolean | true | Show/hide the add item input field |
-| show_completed | boolean | false | Show/hide completed items |
-| show_completed_menu | boolean | false | Show/hide delete completed items button |
-| enable_search | boolean | false | Enable or disable search functionality |
-| delete_confirmation | boolean | false | Show confirmation dialog when deleting completed items |
-| card_spacing | number | 15 | Space between cards in pixels |
+| `entities` | list | Required | List of todo entities to display |
+| `show_pagination` | boolean | `true` | Show/hide pagination dots |
+| `show_icons` | boolean | `false` | Show/hide icons for each todo list |
+| `show_addbutton` | boolean | `false` | Show/hide the "+" button next to the add field |
+| `show_create` | boolean | `true` | Show/hide the add item input field |
+| `show_completed` | boolean | `false` | Show/hide completed items |
+| `show_completed_menu` | boolean | `false` | Show/hide delete completed items button |
+| `enable_search` | boolean | `false` | Enable or disable search functionality |
+| `delete_confirmation` | boolean | `false` | Show confirmation dialog when deleting completed items |
+| `card_spacing` | number | `15` | Space between cards in pixels |
 
 
 ### Entity Configuration Options
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| entity | string | Required | Todo list entity ID |
-| show_title | boolean | false | Show custom title above todo list |
-| title | string | Optional | Custom title text (Only used if show_title is true) |
-| background_image | string | Optional | Background image URL for this entity |
-| display_order | string | none | Sort order: `none`, `alpha_asc`, `alpha_desc`, `duedate_asc`, `duedate_desc` |
-| icon | string | Optional | Custom icon for this todo list (e.g., `mdi:cart-variant`) |
+| `entity` | string | Required | Todo list entity ID |
+| `show_title` | boolean | `false` | Show custom title above todo list |
+| `title` | string | Optional | Custom title text (Only used if show_title is true) |
+| `background_image` | string | Optional | Background image URL for this entity |
+| `display_order` | string | none | Sort order: `none`, `alpha_asc`, `alpha_desc`, `duedate_asc`, `duedate_desc` |
+| `icon` | string | Optional | Custom icon for this todo list (e.g., `mdi:cart-variant`) |
 
 
 ### Example Configuration
@@ -148,6 +148,17 @@ delete_confirmation: true
 card_spacing: 10
 ```
 
+## Drag-and-Drop Reordering
+
+The Todo Swipe Card supports drag-and-drop reordering of todo items for integrations that implement the `MOVE_TODO_ITEM` feature.
+
+### How to Use
+1. Simply click and hold on any todo item
+2. Drag it up or down to your desired position
+3. Visual indicators will show where the item will be placed
+4. Release to complete the move
+
+**Note**: The Shopping List integration and some third-party integrations may not support drag-and-drop reordering. In these cases, items will display without drag-and-drop functionality.
 
 ## Customizing and Theming
 The Todo Swipe Card provides extensive customization capabilities through two primary methods: Home Assistant themes and card-mod styling. The card supports over fourty CSS variables that control every aspect of its appearance, from basic colors and typography to sophisticated pagination styling and transition effects.
