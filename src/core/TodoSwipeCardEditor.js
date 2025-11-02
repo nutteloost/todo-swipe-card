@@ -707,6 +707,62 @@ export class TodoSwipeCardEditor extends LitElement {
     this._debounceDispatch(newConfig);
   }
 
+  _entityHideFutureItemsChanged(ev) {
+    const index = parseInt(ev.target.getAttribute('data-index'));
+    if (isNaN(index)) return;
+
+    const enabled = ev.target.checked;
+    const entities = [...this._config.entities];
+    const currentEntity = entities[index];
+
+    // Ensure entity is in object format
+    if (typeof currentEntity === 'string') {
+      if (enabled) {
+        entities[index] = { entity: currentEntity, hide_future_items: true };
+      }
+    } else {
+      if (enabled) {
+        entities[index] = { ...currentEntity, hide_future_items: true };
+      } else {
+        const updatedEntity = { ...currentEntity };
+        delete updatedEntity.hide_future_items;
+        entities[index] = updatedEntity;
+      }
+    }
+
+    const newConfig = { ...this._config, entities };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+
+  _entityMaxItemsChanged(ev) {
+    const index = parseInt(ev.target.getAttribute('data-index'));
+    if (isNaN(index)) return;
+
+    const value = parseInt(ev.target.value);
+    const entities = [...this._config.entities];
+    const currentEntity = entities[index];
+
+    // Ensure entity is in object format
+    if (typeof currentEntity === 'string') {
+      if (!isNaN(value) && value >= 1) {
+        entities[index] = { entity: currentEntity, max_items: value };
+      }
+    } else {
+      if (!isNaN(value) && value >= 1) {
+        entities[index] = { ...currentEntity, max_items: value };
+      } else {
+        const updatedEntity = { ...currentEntity };
+        delete updatedEntity.max_items;
+        entities[index] = updatedEntity;
+      }
+    }
+
+    const newConfig = { ...this._config, entities };
+    this._config = newConfig;
+    this._debounceDispatch(newConfig);
+  }
+
   /**
    * Get entity configuration at index
    * @param {number} index - Entity index
@@ -716,7 +772,15 @@ export class TodoSwipeCardEditor extends LitElement {
   _getEntityConfigAtIndex(index) {
     const entity = this._config.entities[index];
     if (typeof entity === 'string') {
-      return { entity, display_order: 'none', show_title: false, title: '', background_image: '' };
+      return {
+        entity,
+        display_order: 'none',
+        show_title: false,
+        title: '',
+        background_image: '',
+        hide_future_items: false,
+        max_items: undefined
+      };
     }
     return {
       entity: entity?.entity || '',
@@ -724,7 +788,9 @@ export class TodoSwipeCardEditor extends LitElement {
       show_title: entity?.show_title || false,
       title: entity?.title || '',
       background_image: entity?.background_image || '',
-      icon: entity?.icon || ''
+      icon: entity?.icon || '',
+      hide_future_items: entity?.hide_future_items || false,
+      max_items: entity?.max_items || undefined
     };
   }
 
@@ -938,6 +1004,48 @@ export class TodoSwipeCardEditor extends LitElement {
                                         ></ha-textfield>
                                       `
                                     : ''}
+
+                                  <div
+                                    style="margin: 12px 0 8px 0; background: var(--secondary-background-color); border-radius: 4px; padding: 8px;"
+                                  >
+                                    <div
+                                      style="font-weight: 500; margin-bottom: 8px; color: var(--primary-text-color);"
+                                    >
+                                      Filtering Options
+                                    </div>
+
+                                    <div class="toggle-option" style="margin: 8px 0;">
+                                      <div class="toggle-option-label">
+                                        Hide future items
+                                        <div
+                                          style="font-size: 0.85em; color: var(--secondary-text-color); margin-top: 2px;"
+                                        >
+                                          Only show tasks due today or earlier
+                                        </div>
+                                      </div>
+                                      <ha-switch
+                                        .checked=${entityConfig.hide_future_items}
+                                        data-index=${index}
+                                        @change=${this._entityHideFutureItemsChanged}
+                                      ></ha-switch>
+                                    </div>
+
+                                    <ha-textfield
+                                      label="Maximum items to show"
+                                      type="number"
+                                      min="1"
+                                      .value=${entityConfig.max_items || ''}
+                                      data-index=${index}
+                                      @input=${this._entityMaxItemsChanged}
+                                      style="width: 100%; margin-top: 8px;"
+                                      placeholder="Optional: limit incomplete items"
+                                    >
+                                      <div slot="helper">
+                                        Limits number of incomplete items displayed (completed items
+                                        always shown)
+                                      </div>
+                                    </ha-textfield>
+                                  </div>
                                 `
                               : ''}
                           </div>

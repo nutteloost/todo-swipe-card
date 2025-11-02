@@ -467,9 +467,47 @@ export class CardBuilder {
     debugLog(`Search text for filtering: "${searchText}"`);
 
     // Filter by search text (if searching, include ALL matching items regardless of completion status)
-    const filteredItems = isSearchActive
+    let filteredItems = isSearchActive
       ? allSortedItems.filter((item) => matchesSearch(item, searchText))
       : allSortedItems;
+
+    // Apply hide_future_items filter (only when not searching)
+    if (!isSearchActive && entityConfig?.hide_future_items) {
+      const now = new Date();
+      now.setHours(23, 59, 59, 999); // End of today
+
+      filteredItems = filteredItems.filter((item) => {
+        // Always show completed items and items without due dates
+        if (item.status === 'completed' || !item.due) {
+          return true;
+        }
+
+        // Check if due date is today or in the past
+        try {
+          const dueDate = new Date(item.due);
+          return dueDate <= now;
+        } catch (e) {
+          return true; // Show if date parsing fails
+        }
+      });
+
+      debugLog(`After hide_future_items filter: ${filteredItems.length} items`);
+    }
+
+    // Apply max_items limit (only to incomplete items, only when not searching)
+    if (!isSearchActive && entityConfig?.max_items && typeof entityConfig.max_items === 'number') {
+      const incompleteItems = filteredItems.filter((item) => item.status !== 'completed');
+      const completedItems = filteredItems.filter((item) => item.status === 'completed');
+
+      // Limit incomplete items, keep all completed items
+      const limitedIncompleteItems = incompleteItems.slice(0, entityConfig.max_items);
+
+      filteredItems = [...limitedIncompleteItems, ...completedItems];
+
+      debugLog(
+        `After max_items filter (limit: ${entityConfig.max_items}): ${filteredItems.length} items (${limitedIncompleteItems.length} incomplete + ${completedItems.length} completed)`
+      );
+    }
 
     debugLog(
       `Rendering ${filteredItems.length} items for ${entityId} (from ${items.length} total)`

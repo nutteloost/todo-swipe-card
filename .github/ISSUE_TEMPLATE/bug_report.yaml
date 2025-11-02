@@ -77,7 +77,7 @@ body:
         - Physical Server/Desktop
         - Home Assistant Yellow
         - Home Assistant Green
-        - Other (please specify in description)
+        - Other
       default: 0
     validations:
       required: false
