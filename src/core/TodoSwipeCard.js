@@ -83,7 +83,8 @@ export class TodoSwipeCard extends LitElement {
       show_completed: false,
       show_completed_menu: false,
       delete_confirmation: false,
-      enable_search: false
+      enable_search: false,
+      clear_search_on_uncheck: false
     };
   }
 
@@ -800,6 +801,33 @@ export class TodoSwipeCard extends LitElement {
    */
   _toggleTodoItem(entityId, item, completed) {
     toggleTodoItem(entityId, item, completed, this._hass);
+
+    // Clear search when unchecking an item (if enabled)
+    if (!completed && this._config.clear_search_on_uncheck && this._config.enable_search) {
+      const searchText = this._searchStates.get(entityId);
+      if (searchText && searchText.trim() !== '') {
+        debugLog(`Clearing search after unchecking item "${item.summary}"`);
+        this._searchStates.delete(entityId);
+        this._currentSearchText = '';
+
+        // Find and clear the input field, then update the card
+        const card = this.cards.find((c) => c.entityId === entityId);
+        if (card && card.element) {
+          let inputElement;
+          if (card.element.classList.contains('todo-card-with-title-wrapper')) {
+            inputElement = card.element.querySelector('.native-todo-card .add-textfield input');
+          } else {
+            inputElement = card.element.querySelector('.add-textfield input');
+          }
+          if (inputElement) {
+            inputElement.value = '';
+          }
+
+          // Update the card to refresh the display
+          this.cardBuilder.updateNativeTodoCard(card.element, entityId);
+        }
+      }
+    }
   }
 
   /**
