@@ -513,11 +513,40 @@ export class CardBuilder {
       `Rendering ${filteredItems.length} items for ${entityId} (from ${items.length} total)`
     );
 
-    // Clear and render
-    listContainer.innerHTML = '';
+    // Only modify changed items
+    const existingItemsMap = new Map();
+    Array.from(listContainer.children).forEach((element) => {
+      const uid = element.dataset.itemUid;
+      if (uid) {
+        existingItemsMap.set(uid, element);
+      }
+    });
 
-    if (filteredItems.length > 0) {
-      filteredItems.forEach((item, index) => {
+    // Process each item in the new filtered list
+    const processedUids = new Set();
+    filteredItems.forEach((item, index) => {
+      processedUids.add(item.uid);
+      const existingElement = existingItemsMap.get(item.uid);
+
+      if (existingElement) {
+        // Item already exists - just update its state
+        const shouldBeCompleted = item.status === 'completed';
+        existingElement.classList.toggle('completed', shouldBeCompleted);
+
+        // Update checkbox if needed
+        const checkbox = existingElement.querySelector('ha-checkbox');
+        if (checkbox && checkbox.checked !== shouldBeCompleted) {
+          checkbox.checked = shouldBeCompleted;
+        }
+
+        // Update visibility
+        if (!this._config.show_completed && shouldBeCompleted && !isSearchActive) {
+          existingElement.style.display = 'none';
+        } else {
+          existingElement.style.display = '';
+        }
+      } else {
+        // New item - create it
         try {
           const itemElement = createTodoItemElement(
             item,
@@ -537,8 +566,15 @@ export class CardBuilder {
         } catch (e) {
           console.error(`Error creating item element ${index}:`, e, item);
         }
-      });
-    }
+      }
+    });
+
+    // Remove items that are no longer in the filtered list
+    existingItemsMap.forEach((element, uid) => {
+      if (!processedUids.has(uid)) {
+        element.remove();
+      }
+    });
 
     // Update search results counter
     this.updateSearchCounter(
