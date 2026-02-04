@@ -29,11 +29,12 @@
  *
  * VARIABLE CATEGORIES:
  *
- * 🎨 CORE APPEARANCE
+ * Ã°Å¸Å½Â¨ CORE APPEARANCE
  * --todo-swipe-card-background: Main card background (color/gradient/image)
+ * --todo-swipe-card-backdrop-filter: Backdrop filter effect (e.g., blur(10px))
  * --todo-swipe-card-text-color: Primary text color for todo items
  *
- * 📝 TYPOGRAPHY & LAYOUT
+ * Ã°Å¸â€œÂ TYPOGRAPHY & LAYOUT
  * --todo-swipe-card-font-size: Base font size for todo text (default: 11px)
  * --todo-swipe-card-item-font-weight: Font weight for todo item text
  * --todo-swipe-card-line-height: Line height for multi-line text (default: 1.3)
@@ -41,7 +42,7 @@
  * --todo-swipe-card-item-margin: Space between checkbox and text (default: 5px)
  * --todo-swipe-card-item-align: Vertical alignment: flex-start|center|flex-end
  *
- * 📅 DUE DATE STYLING
+ * Ã°Å¸â€œâ€¦ DUE DATE STYLING
  * --todo-swipe-card-font-size-due-date: Due date text size (default: 11px)
  * --todo-swipe-card-font-weight-due-date: Due date font weight
  * --todo-swipe-card-font-color-due-date: Normal due date color
@@ -49,15 +50,16 @@
  * --todo-swipe-card-due-icon-size: Clock icon size (default: 14px)
  * --todo-swipe-card-due-date-margin-top: Space above due date (default: 2px)
  *
- * 📄 DESCRIPTION STYLING
+ * Ã°Å¸â€œâ€ž DESCRIPTION STYLING
  * --todo-swipe-card-font-size-description: Description text size
  * --todo-swipe-card-font-weight-description: Description font weight
  * --todo-swipe-card-font-color-description: Description text color (muted)
  * --todo-swipe-card-description-margin-top: Space above description (default: 1px)
  *
- * 🏷️ TITLE CONFIGURATION
+ * Ã°Å¸ÂÂ·Ã¯Â¸Â TITLE CONFIGURATION
  * --todo-swipe-card-title-height: Title bar height (default: 40px)
  * --todo-swipe-card-title-background: Title background color
+ * --todo-swipe-card-title-backdrop-filter: Title backdrop filter (falls back to main backdrop-filter)
  * --todo-swipe-card-title-color: Title text color
  * --todo-swipe-card-title-font-size: Title font size (default: 16px)
  * --todo-swipe-card-title-font-weight: Title font weight (default: 500)
@@ -66,14 +68,14 @@
  * --todo-swipe-card-title-border-width: Border thickness (default: 1px)
  * --todo-swipe-card-title-padding-horizontal: Left/right title padding (default: 16px)
  *
- * ☑️ CHECKBOX CUSTOMIZATION
+ * Ã¢Ëœâ€˜Ã¯Â¸Â CHECKBOX CUSTOMIZATION
  * --todo-swipe-card-checkbox-color: Unchecked checkbox color (supports rgba for opacity)
  * --todo-swipe-card-checkbox-checked-color: Checked checkbox color
  * --todo-swipe-card-checkbox-checkmark-color: Checkmark symbol color
  * --todo-swipe-card-checkbox-size: Checkbox dimensions (default: 18px)
  * --todo-swipe-card-checkbox-margin-top: Fine positioning adjustment (default: 1px)
  *
- * 🎯 ICONS & BUTTONS
+ * Ã°Å¸Å½Â¯ ICONS & BUTTONS
  * --todo-swipe-card-icon-size: Todo list icon size (default: 48px)
  * --todo-swipe-card-icon-color: Icon color (supports opacity)
  * --todo-swipe-card-icon-opacity: Icon transparency (default: 0.6)
@@ -83,17 +85,17 @@
  * --todo-swipe-card-delete-button-color: Delete button color
  * --todo-swipe-card-delete-button-top: Manual delete button positioning
  *
- * 📱 INPUT FIELDS
+ * Ã°Å¸â€œÂ± INPUT FIELDS
  * --todo-swipe-card-placeholder-color: "Add item" placeholder text color
  * --todo-swipe-card-placeholder-opacity: Placeholder transparency (default: 1)
  * --todo-swipe-card-input-font-weight: Font weight for typed text
  * --todo-swipe-card-placeholder-font-weight: Font weight for placeholder
  *
- * 🔍 SEARCH FUNCTIONALITY
+ * Ã°Å¸â€Â SEARCH FUNCTIONALITY
  * --todo-swipe-card-search-counter-font-size: Search results counter size (default: 12px)
  * --todo-swipe-card-search-counter-color: Search counter text color
  *
- * 🔘 PAGINATION DOTS
+ * Ã°Å¸â€Ëœ PAGINATION DOTS
  * --todo-swipe-card-pagination-dot-size: Dot diameter (default: 8px)
  * --todo-swipe-card-pagination-dot-active-color: Active dot color
  * --todo-swipe-card-pagination-dot-inactive-color: Inactive dot color
@@ -105,11 +107,11 @@
  * --todo-swipe-card-pagination-dot-active-opacity: Active dot opacity (default: 1)
  * --todo-swipe-card-pagination-dot-inactive-opacity: Inactive dot opacity (default: 0.6)
  *
- * 🎬 ANIMATIONS & TRANSITIONS
+ * Ã°Å¸Å½Â¬ ANIMATIONS & TRANSITIONS
  * --todo-swipe-card-transition-speed: Swipe animation duration (default: 0.3s)
  * --todo-swipe-card-transition-easing: Animation timing function (default: ease-out)
  *
- * 📏 SPACING & MARGINS
+ * Ã°Å¸â€œÂ SPACING & MARGINS
  * --todo-swipe-card-item-spacing: Margin between todo items (default: 1px)
  * --todo-swipe-card-summary-margin-top: Space above main todo text (default: 3px)
  *
@@ -169,6 +171,8 @@ export function createBaseStyles(config) {
       box-sizing: border-box;
       border-radius: var(--card-border-radius);
       background: var(--todo-swipe-card-background, var(--ha-card-background, var(--card-background-color, white)));
+      backdrop-filter: var(--todo-swipe-card-backdrop-filter, none);
+      -webkit-backdrop-filter: var(--todo-swipe-card-backdrop-filter, none);
     }
 
     .pagination {
@@ -308,6 +312,8 @@ export function createBaseStyles(config) {
       overflow-y: auto;
       border-radius: var(--card-border-radius);
       background: var(--todo-swipe-card-background, var(--ha-card-background, var(--card-background-color, white)));
+      backdrop-filter: var(--todo-swipe-card-backdrop-filter, none);
+      -webkit-backdrop-filter: var(--todo-swipe-card-backdrop-filter, none);
       color: var(--todo-swipe-card-text-color, var(--primary-text-color));
       font-size: var(--todo-swipe-card-font-size, var(--todo-swipe-card-typography-size, 11px));
       position: relative;
@@ -406,6 +412,8 @@ export function createBaseStyles(config) {
     }
 
     .todo-list {
+      display: flex;
+      flex-direction: column;
       padding: 4px 0;
     }
 
@@ -482,6 +490,14 @@ export function createBaseStyles(config) {
       text-decoration: line-through;
     }
 
+    /* Prevent animation replay when items become visible again (e.g., after clearing search)
+       Items with animation-played class show the final state immediately without animation */
+    .todo-item.completed.animation-played .todo-summary::after {
+      animation: none !important;
+      -webkit-mask-size: 100% 100% !important;
+      mask-size: 100% 100% !important;
+    }
+
     .todo-description {
       margin-top: var(--todo-swipe-card-description-margin-top, 1px);
       color: var(--todo-swipe-card-font-color-description, var(--secondary-text-color));
@@ -531,7 +547,9 @@ export function createBaseStyles(config) {
       width: 100%;
       border-radius: var(--ha-card-border-radius, 12px);
       overflow: hidden;
-      background: var(--ha-card-background, var(--card-background-color, white));
+      background: var(--todo-swipe-card-background, var(--ha-card-background, var(--card-background-color, white)));
+      backdrop-filter: var(--todo-swipe-card-backdrop-filter, none);
+      -webkit-backdrop-filter: var(--todo-swipe-card-backdrop-filter, none);
       display: flex;
       flex-direction: column;
     }
@@ -542,6 +560,8 @@ export function createBaseStyles(config) {
       align-items: center;
       justify-content: var(--todo-swipe-card-title-align, center);
       background: var(--todo-swipe-card-title-background, var(--secondary-background-color, #f7f7f7));
+      backdrop-filter: var(--todo-swipe-card-title-backdrop-filter, var(--todo-swipe-card-backdrop-filter, none));
+      -webkit-backdrop-filter: var(--todo-swipe-card-title-backdrop-filter, var(--todo-swipe-card-backdrop-filter, none));
       color: var(--todo-swipe-card-title-color, var(--primary-text-color));
       font-size: var(--todo-swipe-card-title-font-size, 16px);
       font-weight: var(--todo-swipe-card-title-font-weight, 500);

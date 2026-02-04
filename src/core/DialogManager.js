@@ -112,7 +112,7 @@ export class DialogManager {
   /**
    * Edit todo item using a custom HA-style dialog
    * @param {string} entityId - Entity ID
-   * @param {Object} item - Todo item
+   * @param {Object} item - Todo item (may be stale from closure)
    */
   editTodoItem(entityId, item) {
     // Prevent rapid dialog creation (debounce)
@@ -123,8 +123,36 @@ export class DialogManager {
     }
     this.dialogOpenTime = now;
 
-    debugLog(`Edit todo item "${item.summary}" in ${entityId}`);
-    this.showTodoItemEditDialog(entityId, item);
+    // Look up fresh item data from cache instead of using stale closure data
+    const freshItem = this._getFreshItemData(entityId, item.uid);
+    if (!freshItem) {
+      debugLog(`Could not find fresh data for item ${item.uid}, using stale data`);
+      this.showTodoItemEditDialog(entityId, item);
+      return;
+    }
+
+    debugLog(`Edit todo item "${freshItem.summary}" in ${entityId} (using fresh data)`);
+    this.showTodoItemEditDialog(entityId, freshItem);
+  }
+
+  /**
+   * Get fresh item data from cache
+   * @param {string} entityId - Entity ID
+   * @param {string} itemUid - Item UID
+   * @returns {Object|null} Fresh item data or null if not found
+   * @private
+   */
+  _getFreshItemData(entityId, itemUid) {
+    if (!this.cardInstance._todoItemsCache) {
+      return null;
+    }
+
+    const cachedItems = this.cardInstance._todoItemsCache.get(entityId);
+    if (!cachedItems) {
+      return null;
+    }
+
+    return cachedItems.find((item) => item.uid === itemUid) || null;
   }
 
   /**
@@ -207,18 +235,62 @@ export class DialogManager {
     let descriptionField = null;
     const showDescription = true; // Always show for now
     if (showDescription) {
-      descriptionField = document.createElement('ha-textfield');
-      descriptionField.label = 'Description';
+      // Create a wrapper for proper styling
+      const textareaWrapper = document.createElement('div');
+      textareaWrapper.style.cssText = `
+        width: 100%;
+        margin-bottom: 16px;
+        position: relative;
+      `;
+
+      // Create label
+      const label = document.createElement('label');
+      label.textContent = 'Description';
+      label.style.cssText = `
+        display: block;
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        margin-bottom: 4px;
+      `;
+
+      // Create textarea
+      descriptionField = document.createElement('textarea');
       descriptionField.value = item?.description || '';
-      descriptionField.setAttribute('type', 'textarea');
-      descriptionField.setAttribute('rows', '3');
+      descriptionField.rows = 3;
       descriptionField.style.cssText = `
         width: 100%;
-        display: block;
-        margin-bottom: 16px;
+        min-height: 60px;
+        max-height: 200px;
+        padding: 8px;
+        border: none;
+        border-bottom: 1px solid var(--divider-color);
+        border-radius: 4px 4px 0 0;
+        background: var(--mdc-text-field-fill-color, #f5f5f5);
+        color: var(--primary-text-color);
+        font-family: var(--mdc-typography-body1-font-family, inherit);
+        font-size: var(--mdc-typography-body1-font-size, 1rem);
+        line-height: 1.5;
+        resize: vertical;
+        box-sizing: border-box;
+        outline: none;
+        transition: border-bottom-color 0.15s ease;
       `;
-      content.appendChild(descriptionField);
-      debugLog('Description field (ha-textfield textarea) added to dialog');
+
+      // Focus styling
+      descriptionField.addEventListener('focus', () => {
+        descriptionField.style.borderBottomColor = 'var(--primary-color)';
+        descriptionField.style.borderBottomWidth = '2px';
+      });
+
+      descriptionField.addEventListener('blur', () => {
+        descriptionField.style.borderBottomColor = 'var(--divider-color)';
+        descriptionField.style.borderBottomWidth = '1px';
+      });
+
+      textareaWrapper.appendChild(label);
+      textareaWrapper.appendChild(descriptionField);
+      content.appendChild(textareaWrapper);
+      debugLog('Description field (native textarea) added to dialog');
     }
 
     // Due date field (if supported)

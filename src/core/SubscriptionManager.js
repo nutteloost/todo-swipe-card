@@ -65,17 +65,14 @@ export class SubscriptionManager {
             }
           }
 
-          // Create new subscription
+          // Create new subscription - it will trigger initial update via subscription event
           const unsubscribe = await subscribeToTodoItems(card.entityId, this._hass);
           if (!this.cardInstance._todoSubscriptions) {
             this.cardInstance._todoSubscriptions = new Map();
           }
           this.cardInstance._todoSubscriptions.set(card.entityId, unsubscribe);
 
-          // Do initial update
-          setTimeout(async () => {
-            await this.cardInstance.cardBuilder.updateNativeTodoCard(card.element, card.entityId);
-          }, 100);
+          // NOTE: Removed redundant initial update - subscription event will handle it
         }
       }
     }

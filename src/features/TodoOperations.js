@@ -322,7 +322,9 @@ export function createTodoItemElement(
   entityState
 ) {
   const itemElement = document.createElement('div');
-  itemElement.className = `todo-item ${item.status === 'completed' ? 'completed' : ''}`;
+  // Add animation-played to already-completed items to prevent animation on initial render/reorder
+  const isCompleted = item.status === 'completed';
+  itemElement.className = `todo-item ${isCompleted ? 'completed animation-played' : ''}`;
   itemElement.dataset.itemUid = item.uid; // Store UID for drag and drop
 
   // Create checkbox

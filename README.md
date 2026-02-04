@@ -207,6 +207,7 @@ card_mod:
 #### Core Appearance
 ```yaml
 --todo-swipe-card-background:                           /* Main card background color or gradient */
+--todo-swipe-card-backdrop-filter:                      /* Backdrop filter effect for the card (e.g., blur(10px)) */
 --todo-swipe-card-text-color:                           /* Primary text color for all todo items, excluding descriptions and due dates */
 ```
 
@@ -245,6 +246,7 @@ card_mod:
 ```yaml
 --todo-swipe-card-title-height:                         /* Height of entity titles (default: 40px) */
 --todo-swipe-card-title-background:                     /* Background color of entity titles */
+--todo-swipe-card-title-backdrop-filter:                /* Backdrop filter for title bar (falls back to --todo-swipe-card-backdrop-filter) */
 --todo-swipe-card-title-color:                          /* Text color of entity titles */
 --todo-swipe-card-title-font-size:                      /* Font size of entity titles (default: 16px) */
 --todo-swipe-card-title-font-weight:                    /* Font weight of entity titles (default: 500) */

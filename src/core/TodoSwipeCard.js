@@ -43,6 +43,7 @@ export class TodoSwipeCard extends LitElement {
 
     this._todoItemsCache = new Map(); // Cache for todo items per entity
     this._isAddingItem = false;
+    this._pendingToggles = new Map(); // Track recently toggled items to prevent subscription override
 
     // Initialize dialog manager
     this.dialogManager = new DialogManager(this);
@@ -608,6 +609,11 @@ export class TodoSwipeCard extends LitElement {
     // Clean up search functionality
     cleanupSearchHandlers(this);
 
+    // Clear pending toggles
+    if (this._pendingToggles) {
+      this._pendingToggles.clear();
+    }
+
     // Properly remove swipe gesture handlers (simplified)
     if (this.cardContainer) {
       if (this._touchStartHandler) {
@@ -800,6 +806,18 @@ export class TodoSwipeCard extends LitElement {
    * @private
    */
   _toggleTodoItem(entityId, item, completed) {
+    // Track this toggle as pending to prevent subscription from overriding the state
+    const pendingKey = `${entityId}:${item.uid}`;
+    this._pendingToggles.set(pendingKey, {
+      status: completed ? 'completed' : 'needs_action',
+      timestamp: Date.now()
+    });
+
+    // Clear pending toggle after 3 seconds (subscription should have caught up by then)
+    setTimeout(() => {
+      this._pendingToggles.delete(pendingKey);
+    }, 3000);
+
     toggleTodoItem(entityId, item, completed, this._hass);
 
     // Clear search when unchecking an item (if enabled)

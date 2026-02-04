@@ -10,6 +10,9 @@ import { debugLog } from '../utils/Debug.js';
  * @param {Object} hass - Home Assistant object
  */
 export function setupDragAndDrop(listContainer, entityId, items, hass) {
+  // CRITICAL: Clean up any existing drag-and-drop handlers first
+  cleanupDragAndDrop(listContainer);
+
   const todoItems = listContainer.querySelectorAll('.todo-item[data-supports-drag="true"]');
 
   // Track which item is currently showing drop indicator
@@ -92,7 +95,7 @@ export function setupDragAndDrop(listContainer, entityId, items, hass) {
           navigator.vibrate(50);
         }
 
-        debugLog(`✓ Drag ENABLED after hold: ${item.summary}`);
+        debugLog(`✔ Drag ENABLED after hold: ${item.summary}`);
       }, HOLD_DURATION);
 
       debugLog(`⏱ Hold timer started for: ${item.summary}`);
@@ -164,14 +167,8 @@ export function setupDragAndDrop(listContainer, entityId, items, hass) {
       }, 100);
     };
 
-    // Attach hold detection listeners (desktop only)
-    itemElement.addEventListener('mousedown', handlePointerDown);
-    itemElement.addEventListener('mousemove', handlePointerMove);
-    itemElement.addEventListener('mouseup', handlePointerUp);
-    itemElement.addEventListener('mouseleave', handlePointerUp);
-
-    // Drag start - check if properly enabled on desktop
-    itemElement.addEventListener('dragstart', (e) => {
+    // Drag start handler
+    const handleDragStart = (e) => {
       if (e.target.closest('ha-checkbox') || e.target.closest('.todo-checkbox')) {
         e.preventDefault();
         return;
@@ -199,10 +196,10 @@ export function setupDragAndDrop(listContainer, entityId, items, hass) {
       }, 0);
 
       debugLog(`🎯 Drag STARTED: ${item.summary}`);
-    });
+    };
 
-    // Drag end
-    itemElement.addEventListener('dragend', () => {
+    // Drag end handler
+    const handleDragEnd = () => {
       itemElement.classList.remove('dragging', 'drag-ready');
       itemElement.setAttribute('draggable', 'false');
       dragEnabled = false;
@@ -212,8 +209,25 @@ export function setupDragAndDrop(listContainer, entityId, items, hass) {
       currentDropTarget = null;
       currentDropPosition = null;
 
-      debugLog(`✓ Drag ENDED: ${item.summary}`);
-    });
+      debugLog(`✔ Drag ENDED: ${item.summary}`);
+    };
+
+    // Store ALL handlers on the element for cleanup
+    itemElement._dragHandlers = {
+      handlePointerDown,
+      handlePointerMove,
+      handlePointerUp,
+      handleDragStart,
+      handleDragEnd
+    };
+
+    // Attach all event listeners
+    itemElement.addEventListener('mousedown', handlePointerDown);
+    itemElement.addEventListener('mousemove', handlePointerMove);
+    itemElement.addEventListener('mouseup', handlePointerUp);
+    itemElement.addEventListener('mouseleave', handlePointerUp);
+    itemElement.addEventListener('dragstart', handleDragStart);
+    itemElement.addEventListener('dragend', handleDragEnd);
 
     // Add dragover and drop listeners
     setupDragOverAndDrop(
@@ -245,7 +259,7 @@ function setupDragEventListeners(
   hass
 ) {
   // Drag start (mobile/simple version - no hold check)
-  itemElement.addEventListener('dragstart', (e) => {
+  const handleDragStart = (e) => {
     if (e.target.closest('ha-checkbox') || e.target.closest('.todo-checkbox')) {
       e.preventDefault();
       return;
@@ -266,14 +280,24 @@ function setupDragEventListeners(
     }, 0);
 
     debugLog(`Drag started for item: ${item.summary}`);
-  });
+  };
 
   // Drag end
-  itemElement.addEventListener('dragend', () => {
+  const handleDragEnd = () => {
     itemElement.classList.remove('dragging');
     todoItems.forEach((el) => el.classList.remove('drag-over-top', 'drag-over-bottom'));
     debugLog(`Drag ended for item: ${item.summary}`);
-  });
+  };
+
+  // Store handlers for cleanup
+  itemElement._dragHandlers = {
+    handleDragStart,
+    handleDragEnd
+  };
+
+  // Attach listeners
+  itemElement.addEventListener('dragstart', handleDragStart);
+  itemElement.addEventListener('dragend', handleDragEnd);
 
   // Dragover and drop
   setupDragOverAndDrop(
@@ -303,8 +327,8 @@ function setupDragOverAndDrop(
   items,
   hass
 ) {
-  // Drag over
-  itemElement.addEventListener('dragover', (e) => {
+  // Drag over handler
+  const handleDragOver = (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
 
@@ -324,10 +348,10 @@ function setupDragOverAndDrop(
     } else {
       itemElement.classList.add('drag-over-bottom');
     }
-  });
+  };
 
-  // Drop
-  itemElement.addEventListener('drop', async (e) => {
+  // Drop handler
+  const handleDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -379,7 +403,15 @@ function setupDragOverAndDrop(
 
     const { moveItem } = await import('./TodoOperations.js');
     await moveItem(entityId, draggedUid, previousUid, hass);
-  });
+  };
+
+  // Store handlers for cleanup
+  itemElement._dragOverHandler = handleDragOver;
+  itemElement._dropHandler = handleDrop;
+
+  // Attach listeners
+  itemElement.addEventListener('dragover', handleDragOver);
+  itemElement.addEventListener('drop', handleDrop);
 }
 
 /**
@@ -391,7 +423,50 @@ export function cleanupDragAndDrop(listContainer) {
 
   const todoItems = listContainer.querySelectorAll('.todo-item');
   todoItems.forEach((item) => {
+    // Remove draggable attribute and classes
     item.setAttribute('draggable', 'false');
     item.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom', 'drag-ready');
+
+    // Remove stored event handlers if they exist
+    if (item._dragHandlers) {
+      const {
+        handlePointerDown,
+        handlePointerMove,
+        handlePointerUp,
+        handleDragStart,
+        handleDragEnd
+      } = item._dragHandlers;
+
+      if (handlePointerDown) {
+        item.removeEventListener('mousedown', handlePointerDown);
+      }
+      if (handlePointerMove) {
+        item.removeEventListener('mousemove', handlePointerMove);
+      }
+      if (handlePointerUp) {
+        item.removeEventListener('mouseup', handlePointerUp);
+        item.removeEventListener('mouseleave', handlePointerUp);
+      }
+      if (handleDragStart) {
+        item.removeEventListener('dragstart', handleDragStart);
+      }
+      if (handleDragEnd) {
+        item.removeEventListener('dragend', handleDragEnd);
+      }
+
+      // Clear the stored handlers
+      delete item._dragHandlers;
+    }
+
+    // Also clean up dragover and drop handlers if they were stored
+    if (item._dragOverHandler) {
+      item.removeEventListener('dragover', item._dragOverHandler);
+      delete item._dragOverHandler;
+    }
+
+    if (item._dropHandler) {
+      item.removeEventListener('drop', item._dropHandler);
+      delete item._dropHandler;
+    }
   });
 }

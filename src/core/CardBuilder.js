@@ -207,6 +207,9 @@ export class CardBuilder {
     if (!this.cardInstance._todoSubscriptions) {
       this.cardInstance._todoSubscriptions = new Map();
     }
+    if (!this.cardInstance._dragDropInitialized) {
+      this.cardInstance._dragDropInitialized = new Set();
+    }
 
     // Create the main card element
     const cardElement = document.createElement('div');
@@ -259,30 +262,60 @@ export class CardBuilder {
         }
       }
 
-      // Create new subscription
+      // Create new subscription - it will trigger initial update via subscription event
       const unsubscribe = await subscribeToTodoItems(entityId, this._hass);
       this.cardInstance._todoSubscriptions.set(entityId, unsubscribe);
 
-      // Do initial fetch
-      debugLog('Doing initial fetch for', entityId);
-      setTimeout(async () => {
-        await this.updateNativeTodoCard(finalElement, entityId);
-      }, 100);
+      // NOTE: Removed redundant initial fetch - subscription event will handle initial update
     }
 
     return finalElement;
   }
 
   /**
-   * Create add item row
+   * Initialize drag-and-drop for a card
+   * @param {HTMLElement} cardElement - Card element
    * @param {string} entityId - Entity ID
-   * @returns {HTMLElement} Add row element
+   * @param {boolean} force - Force re-initialization
    */
+  async initializeDragAndDrop(cardElement, entityId, force = false) {
+    const entityState = this._hass?.states?.[entityId];
+    if (!entityState || !entitySupportsFeature(entityState, 8)) {
+      return;
+    }
+
+    if (!force && this.cardInstance._dragDropInitialized.has(entityId)) {
+      return;
+    }
+
+    let listContainer = null;
+    if (cardElement.classList.contains('todo-card-with-title-wrapper')) {
+      listContainer = cardElement.querySelector('.native-todo-card .todo-list');
+    } else if (cardElement.classList.contains('native-todo-card')) {
+      listContainer = cardElement.querySelector('.todo-list');
+    } else {
+      listContainer = cardElement.querySelector('.todo-list');
+    }
+
+    if (!listContainer) {
+      return;
+    }
+
+    try {
+      const items = this.cardInstance._todoItemsCache?.get(entityId) || [];
+      const { setupDragAndDrop } = await import('../features/DragDrop.js');
+      setupDragAndDrop(listContainer, entityId, items, this._hass);
+      this.cardInstance._dragDropInitialized.add(entityId);
+      debugLog(`Drag-and-drop initialized for ${entityId}`);
+    } catch (error) {
+      console.error(`Error initializing drag-and-drop for ${entityId}:`, error);
+    }
+  }
+
   createAddRow(entityId) {
     const addRow = document.createElement('div');
     addRow.className = 'add-row';
 
-    // Create text input
     const textField = document.createElement('div');
     textField.className = 'add-textfield';
 
@@ -290,14 +323,11 @@ export class CardBuilder {
     input.type = 'text';
     input.placeholder = this._config.enable_search ? 'Type to search / add' : 'Add item';
 
-    // Add keydown handler for Enter key
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const value = input.value.trim();
         if (value) {
-          // Check if this is search mode
           if (this._config.enable_search) {
-            // Use the search functionality
             handleSearchKeydown(
               e,
               entityId,
@@ -306,18 +336,15 @@ export class CardBuilder {
               this.cardInstance
             );
           } else {
-            // Non-search mode - just add the item
             this.cardInstance._addTodoItem(entityId, value);
             input.value = '';
             input.focus();
           }
         }
       } else if (e.key === 'Escape' && this._config.enable_search) {
-        // Clear search on Escape
         input.value = '';
         this.cardInstance._searchStates.delete(entityId);
         this.cardInstance._currentSearchText = '';
-        // Find the card element and update it
         const cardElement =
           input.closest('.native-todo-card') || input.closest('.todo-card-with-title-wrapper');
         if (cardElement) {
@@ -329,29 +356,20 @@ export class CardBuilder {
     textField.appendChild(input);
     addRow.appendChild(textField);
 
-    // Create add button if enabled
     if (this._config.show_addbutton) {
       const addButton = document.createElement('button');
       addButton.className = 'add-button';
       addButton.title = 'Add item';
-      addButton.innerHTML = `
-       <svg viewBox="0 0 24 24">
-         <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
-       </svg>
-     `;
+      addButton.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg>`;
 
       addButton.addEventListener('click', () => {
         const value = input.value.trim();
         if (value) {
-          // Check if this is search mode - same logic as Enter key
           if (this._config.enable_search) {
-            // CLEAR SEARCH STATE FIRST - before doing anything else
-            debugLog(`Clearing search state for ${entityId} BEFORE adding item (+ button)`);
             this.cardInstance._searchStates.delete(entityId);
             this.cardInstance._currentSearchText = '';
             input.value = '';
 
-            // Check if the search text matches any existing items
             const entityState = this.cardInstance._hass?.states?.[entityId];
             const items = entityState?.attributes?.items || [];
             const exactMatch = items.some(
@@ -359,21 +377,15 @@ export class CardBuilder {
             );
 
             if (!exactMatch) {
-              debugLog(`No exact match found, adding item: "${value}" (+ button)`);
-              // Add new item since no exact match found
               this.cardInstance._addTodoItem(entityId, value);
-            } else {
-              debugLog(`Exact match found, not adding item: "${value}" (+ button)`);
             }
 
-            // Update the card to clear search display
             const cardElement =
               input.closest('.native-todo-card') || input.closest('.todo-card-with-title-wrapper');
             if (cardElement) {
               this.updateNativeTodoCard(cardElement, entityId);
             }
           } else {
-            // Non-search mode - just add the item (original behavior)
             this.cardInstance._addTodoItem(entityId, value);
             input.value = '';
           }
@@ -387,51 +399,41 @@ export class CardBuilder {
     return addRow;
   }
 
-  /**
-   * Update native todo card
-   * @param {HTMLElement} cardElement - Card element
-   * @param {string} entityId - Entity ID
-   */
   async updateNativeTodoCard(cardElement, entityId) {
     debugLog(`Starting updateNativeTodoCard for ${entityId}`);
 
     if (!this._hass || !entityId) {
-      debugLog('No hass or entityId provided');
       return;
     }
 
     const entityState = this._hass.states[entityId];
     if (!entityState) {
-      debugLog(`Entity ${entityId} not found in hass.states`);
       return;
     }
 
-    // Always fetch fresh items instead of relying on cache
     let items = [];
-    try {
-      items = await fetchTodoItems(entityId, this._hass);
-      debugLog(`Fetched ${items.length} fresh items for ${entityId}`);
 
-      // Update cache with fresh items
-      if (!this.cardInstance._todoItemsCache) {
-        this.cardInstance._todoItemsCache = new Map();
-      }
-      this.cardInstance._todoItemsCache.set(entityId, items);
-    } catch (error) {
-      debugLog(`Failed to fetch items for ${entityId}, trying cache:`, error);
+    // Check if we have cached items from the subscription (most up-to-date source)
+    // Use has() to properly handle empty arrays (valid empty todo lists)
+    if (this.cardInstance._todoItemsCache?.has(entityId)) {
+      // Use cached subscription data - it's the freshest source
+      items = this.cardInstance._todoItemsCache.get(entityId) || [];
+      debugLog(`Using ${items.length} cached items for ${entityId}`);
+    } else {
+      // No cache, fetch fresh items
+      try {
+        items = await fetchTodoItems(entityId, this._hass);
+        debugLog(`Fetched ${items.length} fresh items for ${entityId}`);
 
-      // Fallback to cache if fetch fails
-      if (this.cardInstance._todoItemsCache && this.cardInstance._todoItemsCache.has(entityId)) {
-        items = this.cardInstance._todoItemsCache.get(entityId) || [];
-        debugLog(`Using ${items.length} cached items for ${entityId}`);
-      } else {
-        // Last resort: try to get from entity attributes
+        if (!this.cardInstance._todoItemsCache) {
+          this.cardInstance._todoItemsCache = new Map();
+        }
+        this.cardInstance._todoItemsCache.set(entityId, items);
+      } catch (error) {
         items = entityState.attributes?.items || [];
-        debugLog(`Using ${items.length} items from entity attributes for ${entityId}`);
       }
     }
 
-    // Find the list container
     let listContainer = null;
     if (cardElement.classList.contains('todo-card-with-title-wrapper')) {
       listContainer = cardElement.querySelector('.native-todo-card .todo-list');
@@ -442,7 +444,6 @@ export class CardBuilder {
     }
 
     if (!listContainer) {
-      debugLog('Creating missing list container');
       let targetCard = cardElement;
       if (cardElement.classList.contains('todo-card-with-title-wrapper')) {
         targetCard = cardElement.querySelector('.native-todo-card');
@@ -453,67 +454,52 @@ export class CardBuilder {
         listContainer.className = 'todo-list';
         targetCard.appendChild(listContainer);
       } else {
-        debugLog('Could not create list container');
         return;
       }
     }
 
-    // Apply sorting (always use ALL items for search purposes)
     const entityConfig = this._getEntityConfig(entityId);
     const allSortedItems = sortTodoItems(items, entityConfig?.display_order, this._hass);
     const searchText = this.cardInstance._searchStates.get(entityId) || '';
     const isSearchActive = searchText && searchText.trim() !== '';
 
-    debugLog(`Search text for filtering: "${searchText}"`);
+    let visibleItems = allSortedItems;
 
-    // Filter by search text (if searching, include ALL matching items regardless of completion status)
-    let filteredItems = isSearchActive
-      ? allSortedItems.filter((item) => matchesSearch(item, searchText))
-      : allSortedItems;
-
-    // Apply hide_future_items filter (only when not searching)
     if (!isSearchActive && entityConfig?.hide_future_items) {
       const now = new Date();
-      now.setHours(23, 59, 59, 999); // End of today
+      now.setHours(23, 59, 59, 999);
 
-      filteredItems = filteredItems.filter((item) => {
-        // Always show completed items and items without due dates
+      visibleItems = visibleItems.filter((item) => {
         if (item.status === 'completed' || !item.due) {
           return true;
         }
-
-        // Check if due date is today or in the past
         try {
           const dueDate = new Date(item.due);
           return dueDate <= now;
         } catch (e) {
-          return true; // Show if date parsing fails
+          return true;
         }
       });
-
-      debugLog(`After hide_future_items filter: ${filteredItems.length} items`);
     }
 
-    // Apply max_items limit (only to incomplete items, only when not searching)
     if (!isSearchActive && entityConfig?.max_items && typeof entityConfig.max_items === 'number') {
-      const incompleteItems = filteredItems.filter((item) => item.status !== 'completed');
-      const completedItems = filteredItems.filter((item) => item.status === 'completed');
-
-      // Limit incomplete items, keep all completed items
+      const incompleteItems = visibleItems.filter((item) => item.status !== 'completed');
+      const completedItems = visibleItems.filter((item) => item.status === 'completed');
       const limitedIncompleteItems = incompleteItems.slice(0, entityConfig.max_items);
-
-      filteredItems = [...limitedIncompleteItems, ...completedItems];
-
-      debugLog(
-        `After max_items filter (limit: ${entityConfig.max_items}): ${filteredItems.length} items (${limitedIncompleteItems.length} incomplete + ${completedItems.length} completed)`
-      );
+      visibleItems = [...limitedIncompleteItems, ...completedItems];
     }
 
-    debugLog(
-      `Rendering ${filteredItems.length} items for ${entityId} (from ${items.length} total)`
-    );
+    const visibleUids = new Set(visibleItems.map((item) => item.uid));
 
-    // Only modify changed items
+    const searchMatchUids = new Set();
+    if (isSearchActive) {
+      allSortedItems.forEach((item) => {
+        if (matchesSearch(item, searchText)) {
+          searchMatchUids.add(item.uid);
+        }
+      });
+    }
+
     const existingItemsMap = new Map();
     Array.from(listContainer.children).forEach((element) => {
       const uid = element.dataset.itemUid;
@@ -522,31 +508,70 @@ export class CardBuilder {
       }
     });
 
-    // Process each item in the new filtered list
     const processedUids = new Set();
-    filteredItems.forEach((item, index) => {
+    let hasNewItems = false;
+
+    for (const item of allSortedItems) {
       processedUids.add(item.uid);
       const existingElement = existingItemsMap.get(item.uid);
 
-      if (existingElement) {
-        // Item already exists - just update its state
-        const shouldBeCompleted = item.status === 'completed';
-        existingElement.classList.toggle('completed', shouldBeCompleted);
+      const shouldBeVisible =
+        visibleUids.has(item.uid) && (isSearchActive ? searchMatchUids.has(item.uid) : true);
 
-        // Update checkbox if needed
+      // Check if there's a pending toggle for this item (user just clicked, subscription might have stale data)
+      const pendingKey = `${entityId}:${item.uid}`;
+      const pendingToggle = this.cardInstance._pendingToggles?.get(pendingKey);
+
+      // Use pending status if available (it's the user's intended state), otherwise use item status
+      const effectiveStatus = pendingToggle ? pendingToggle.status : item.status;
+      if (pendingToggle) {
+        debugLog(
+          `Using pending status for "${item.summary}": ${effectiveStatus} (subscription had: ${item.status})`
+        );
+      }
+      const shouldBeCompleted = effectiveStatus === 'completed';
+      const hideCompleted = !this._config.show_completed && shouldBeCompleted && !isSearchActive;
+
+      if (existingElement) {
+        await this._updateTodoItemElement(existingElement, item, entityState);
+
+        const isCurrentlyCompleted = existingElement.classList.contains('completed');
+        if (isCurrentlyCompleted !== shouldBeCompleted) {
+          if (shouldBeCompleted) {
+            // Item is being completed - remove animation-played so animation plays, then add completed
+            existingElement.classList.remove('animation-played');
+            existingElement.classList.add('completed');
+
+            // After animation finishes, add animation-played to prevent replay on reorder/search
+            const summaryElement = existingElement.querySelector('.todo-summary');
+            const addAnimationPlayed = () => {
+              existingElement.classList.add('animation-played');
+            };
+
+            if (summaryElement) {
+              // Listen for animation end
+              summaryElement.addEventListener('animationend', addAnimationPlayed, { once: true });
+            }
+            // Fallback timeout in case animation doesn't fire (reduced motion, no custom animation, etc.)
+            setTimeout(addAnimationPlayed, 300);
+          } else {
+            // Item is being uncompleted - remove both classes
+            existingElement.classList.remove('completed', 'animation-played');
+          }
+        }
+
         const checkbox = existingElement.querySelector('ha-checkbox');
         if (checkbox && checkbox.checked !== shouldBeCompleted) {
           checkbox.checked = shouldBeCompleted;
         }
 
-        // Update visibility
-        if (!this._config.show_completed && shouldBeCompleted && !isSearchActive) {
+        if (!shouldBeVisible || hideCompleted) {
           existingElement.style.display = 'none';
         } else {
           existingElement.style.display = '';
         }
       } else {
-        // New item - create it
+        hasNewItems = true;
         try {
           const itemElement = createTodoItemElement(
             item,
@@ -557,55 +582,100 @@ export class CardBuilder {
             entityState
           );
 
-          // Show completed items when actively searching, otherwise respect show_completed setting
-          if (!this._config.show_completed && item.status === 'completed' && !isSearchActive) {
+          if (!shouldBeVisible || hideCompleted) {
             itemElement.style.display = 'none';
           }
 
           listContainer.appendChild(itemElement);
+          existingItemsMap.set(item.uid, itemElement);
         } catch (e) {
-          console.error(`Error creating item element ${index}:`, e, item);
+          console.error(`Error creating item element:`, e, item);
         }
       }
-    });
+    }
 
-    // Remove items that are no longer in the filtered list
     existingItemsMap.forEach((element, uid) => {
       if (!processedUids.has(uid)) {
         element.remove();
       }
     });
 
-    // Update search results counter
+    // Use CSS order property to control visual order instead of physically moving DOM elements
+    // This prevents CSS animations from restarting when items are reordered
+    allSortedItems.forEach((item, index) => {
+      const element = existingItemsMap.get(item.uid);
+      if (element) {
+        element.style.order = index;
+      }
+    });
+
     this.updateSearchCounter(
       cardElement,
       entityId,
       searchText,
-      filteredItems.length,
+      isSearchActive ? searchMatchUids.size : visibleItems.length,
       allSortedItems.length
     );
 
     debugLog(`Finished updating card for ${entityId}`);
 
-    // Setup drag and drop if entity supports it
-    if (entitySupportsFeature(entityState, 8)) {
-      // Import drag and drop functionality
-      const { setupDragAndDrop } = await import('../features/DragDrop.js');
-      setupDragAndDrop(listContainer, entityId, filteredItems, this._hass);
-      debugLog(`Drag and drop enabled for ${entityId}`);
+    if (hasNewItems && entitySupportsFeature(entityState, 8)) {
+      await this.initializeDragAndDrop(cardElement, entityId, true);
     }
   }
 
-  /**
-   * Update search results counter
-   * @param {HTMLElement} cardElement - Card element
-   * @param {string} entityId - Entity ID
-   * @param {string} searchText - Current search text
-   * @param {number} filteredCount - Number of filtered items
-   * @param {number} totalCount - Total number of items
-   */
+  async _updateTodoItemElement(element, item) {
+    const summaryElement = element.querySelector('.todo-summary');
+    if (summaryElement && summaryElement.textContent !== item.summary) {
+      summaryElement.textContent = item.summary;
+    }
+
+    const contentElement = element.querySelector('.todo-content');
+    if (contentElement) {
+      let descriptionElement = contentElement.querySelector('.todo-description');
+
+      if (item.description) {
+        if (descriptionElement) {
+          if (descriptionElement.textContent !== item.description) {
+            descriptionElement.textContent = item.description;
+          }
+        } else {
+          descriptionElement = document.createElement('div');
+          descriptionElement.className = 'todo-description';
+          descriptionElement.textContent = item.description;
+          if (summaryElement) {
+            summaryElement.parentNode.insertBefore(descriptionElement, summaryElement.nextSibling);
+          } else {
+            contentElement.appendChild(descriptionElement);
+          }
+        }
+      } else if (descriptionElement) {
+        descriptionElement.remove();
+      }
+
+      const dueElement = contentElement.querySelector('.todo-due');
+
+      if (item.due) {
+        const { createDueDateElement } = await import('../ui/DomHelpers.js');
+        const newDueElement = createDueDateElement(item.due);
+
+        const relativeTime = newDueElement.querySelector('ha-relative-time');
+        if (relativeTime && this._hass) {
+          relativeTime.hass = this._hass;
+        }
+
+        if (dueElement) {
+          dueElement.replaceWith(newDueElement);
+        } else {
+          contentElement.appendChild(newDueElement);
+        }
+      } else if (dueElement) {
+        dueElement.remove();
+      }
+    }
+  }
+
   updateSearchCounter(cardElement, entityId, searchText, filteredCount, totalCount) {
-    // Find the add row
     let addRow = null;
     if (cardElement.classList.contains('todo-card-with-title-wrapper')) {
       addRow = cardElement.querySelector('.native-todo-card .add-row');
@@ -615,26 +685,20 @@ export class CardBuilder {
 
     if (!addRow) return;
 
-    // Remove existing counter
     const existingCounter = cardElement.querySelector('.search-counter');
     if (existingCounter) {
       existingCounter.remove();
     }
 
-    // Handle add-row CSS class and counter
     if (searchText && searchText.trim() !== '' && totalCount > 0) {
-      // Add CSS class to reduce add-row margin when search counter is present
       addRow.classList.add('has-search-counter');
 
-      // Create and insert counter
       const counter = document.createElement('div');
       counter.className = 'search-counter';
       counter.textContent = `Showing ${filteredCount} of ${totalCount} results`;
 
-      // Insert after the add-row
       addRow.parentNode.insertBefore(counter, addRow.nextSibling);
     } else {
-      // Remove CSS class to restore default spacing when no search counter
       addRow.classList.remove('has-search-counter');
     }
   }
