@@ -671,7 +671,6 @@ export class DialogManager {
   closeDialog(dialog) {
     if (dialog && dialog.open) {
       dialog.open = false;
-      dialog.close();
     }
   }
 
