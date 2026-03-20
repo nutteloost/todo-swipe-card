@@ -168,6 +168,7 @@ export class DialogManager {
 
     // Create dialog with HA's native styling and accessibility
     const dialog = document.createElement('ha-dialog');
+    const dialogFooter = document.createElement('ha-dialog-footer');
     dialog.heading = item ? 'Edit item' : 'Add Todo Item';
     dialog.open = true;
     dialog.style.setProperty('--mdc-dialog-min-width', 'min(600px, 95vw)');
@@ -536,7 +537,7 @@ export class DialogManager {
         }
       });
 
-      dialog.appendChild(deleteButton);
+      dialogFooter.appendChild(deleteButton);
     }
 
     // Cancel button
@@ -544,7 +545,7 @@ export class DialogManager {
     cancelButton.addEventListener('click', () => {
       this.closeDialog(dialog);
     });
-    dialog.appendChild(cancelButton);
+    dialogFooter.appendChild(cancelButton);
 
     // Save button
     const saveText = item ? 'Save item' : 'Add';
@@ -597,7 +598,7 @@ export class DialogManager {
         this.closeDialog(dialog);
       }
     });
-    dialog.appendChild(saveButton);
+    dialogFooter.appendChild(saveButton);
 
     // Keyboard handlers
     summaryField.addEventListener('keydown', (e) => {
@@ -651,6 +652,8 @@ export class DialogManager {
     dialog.addEventListener('closed', () => {
       this.onDialogClosed(dialog);
     });
+
+    dialog.appendChild(dialogFooter);
 
     // Add to document and focus
     document.body.appendChild(dialog);
@@ -731,6 +734,7 @@ export class DialogManager {
   async showDeleteConfirmationDialog(itemSummary) {
     return new Promise((resolve) => {
       const confirmDialog = document.createElement('ha-dialog');
+      const confirmDialogFooter = document.createElement('ha-dialog-footer');
       confirmDialog.heading = 'Confirm Deletion';
       confirmDialog.open = true;
 
@@ -742,19 +746,19 @@ export class DialogManager {
       // Cancel button first (secondary action)
       const cancelButton = this._createRegularButton('Cancel', 'secondaryAction');
       cancelButton.addEventListener('click', () => {
-        confirmDialog.close();
+        confirmDialog.open = false;
         resolve(false);
       });
 
       // Delete button with red styling
       const confirmButton = this._createCustomDeleteButton('Delete', 'primaryAction');
       confirmButton.addEventListener('click', () => {
-        confirmDialog.close();
+        confirmDialog.open = false;
         resolve(true);
       });
 
-      confirmDialog.appendChild(cancelButton);
-      confirmDialog.appendChild(confirmButton);
+      confirmDialogFooter.appendChild(cancelButton);
+      confirmDialogFooter.appendChild(confirmButton);
 
       confirmDialog.addEventListener('closed', () => {
         if (confirmDialog.parentNode) {
@@ -763,6 +767,7 @@ export class DialogManager {
         resolve(false);
       });
 
+      confirmDialog.appendChild(confirmDialogFooter);
       document.body.appendChild(confirmDialog);
     });
   }
@@ -774,6 +779,7 @@ export class DialogManager {
   showDeleteCompletedConfirmation(entityId) {
     // Create confirmation dialog
     const dialog = document.createElement('ha-dialog');
+    const dialogFooter = document.createElement('ha-dialog-footer');
     dialog.heading = 'Confirm Deletion';
     dialog.open = true;
 
@@ -786,13 +792,13 @@ export class DialogManager {
     // Create cancel button first (secondary action)
     const cancelButton = this._createRegularButton('Cancel', 'secondaryAction');
     cancelButton.addEventListener('click', () => {
-      dialog.close();
+      dialog.open = false;
     });
 
     // Create confirm button with red styling
     const confirmButton = this._createCustomDeleteButton('Delete', 'primaryAction');
     confirmButton.addEventListener('click', () => {
-      dialog.close();
+      dialog.open = false;
       // Import deleteCompletedItems here to avoid circular dependency
       import('../features/TodoOperations.js').then((module) => {
         module.deleteCompletedItems(entityId, this._hass);
@@ -800,8 +806,8 @@ export class DialogManager {
     });
 
     // Append buttons to dialog
-    dialog.appendChild(cancelButton);
-    dialog.appendChild(confirmButton);
+    dialogFooter.appendChild(cancelButton);
+    dialogFooter.appendChild(confirmButton);
 
     // Handle dialog close
     dialog.addEventListener('closed', () => {
@@ -810,6 +816,7 @@ export class DialogManager {
       }
     });
 
+    dialog.appendChild(dialogFooter);
     // Add dialog to document
     document.body.appendChild(dialog);
   }
