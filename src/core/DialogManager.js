@@ -221,7 +221,7 @@ export class DialogManager {
     }
 
     // Summary input with validation
-    const summaryField = document.createElement('ha-textfield');
+    const summaryField = document.createElement('ha-input');
     summaryField.label = 'Task name';
     summaryField.value = item?.summary || '';
     summaryField.required = true;
@@ -494,13 +494,13 @@ export class DialogManager {
       dueSection.appendChild(flexContainer);
       content.appendChild(dueSection);
 
-      debugLog('Custom due date section added with native HA textfield styling');
+      debugLog('Custom due date section added with native HA input styling');
     }
 
     // Add focus trap for better accessibility
     const setupFocusTrap = () => {
       const focusableElements = dialog.querySelectorAll(
-        'ha-textfield, ha-checkbox, input, button, ha-button'
+        'ha-input, ha-checkbox, input, button, ha-button'
       );
       if (focusableElements.length === 0) return;
 
