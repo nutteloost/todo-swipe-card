@@ -588,7 +588,8 @@ export class TodoSwipeCardEditor extends LitElement {
     const index = parseInt(ev.target.getAttribute('data-index'));
     if (isNaN(index)) return;
 
-    const newValue = ev.target.value || 'none';
+    // HA 2026.x ha-select fires `selected` with the value in event.detail
+    const newValue = (ev.detail?.value ?? ev.target.value) || 'none';
     const entities = [...this._config.entities];
     const currentEntity = entities[index];
 
@@ -962,13 +963,13 @@ export class TodoSwipeCardEditor extends LitElement {
 
                                     ${entityConfig.show_title
                                       ? html`
-                                          <ha-textfield
+                                          <ha-input
                                             label="Title Text"
                                             .value=${entityConfig.title}
                                             data-index=${index}
                                             @input=${this._entityTitleTextChanged}
                                             style="width: 100%; margin-top: 8px;"
-                                          ></ha-textfield>
+                                          ></ha-input>
                                         `
                                       : ''}
                                   </div>
@@ -976,39 +977,31 @@ export class TodoSwipeCardEditor extends LitElement {
                                   <ha-select
                                     .label=${'Display Order'}
                                     .value=${entityConfig.display_order}
+                                    .options=${this._getSortModeOptions()}
                                     data-index=${index}
                                     @selected=${this._entityDisplayOrderChanged}
-                                    @closed=${this._stopPropagation}
                                     style="margin-bottom: 4px;"
-                                  >
-                                    ${this._getSortModeOptions().map(
-                                      (option) => html`
-                                        <mwc-list-item .value=${option.value}>
-                                          ${option.label}
-                                        </mwc-list-item>
-                                      `
-                                    )}
-                                  </ha-select>
+                                  ></ha-select>
 
-                                  <ha-textfield
+                                  <ha-input
                                     label="Background Image URL"
                                     .value=${entityConfig.background_image}
                                     data-index=${index}
                                     @input=${this._entityBackgroundImageChanged}
                                     style="width: 100%; margin-top: 4px;"
                                     placeholder="Optional: e.g. /local/images/background.jpg"
-                                  ></ha-textfield>
+                                  ></ha-input>
 
                                   ${this._show_icons
                                     ? html`
-                                        <ha-textfield
+                                        <ha-input
                                           label="Custom Icon"
                                           .value=${entityConfig.icon}
                                           data-index=${index}
                                           @input=${this._entityIconChanged}
                                           style="width: 100%; margin-top: 8px;"
                                           placeholder="Optional: e.g. mdi:cart-variant"
-                                        ></ha-textfield>
+                                        ></ha-input>
                                       `
                                     : ''}
 
@@ -1037,7 +1030,7 @@ export class TodoSwipeCardEditor extends LitElement {
                                       ></ha-switch>
                                     </div>
 
-                                    <ha-textfield
+                                    <ha-input
                                       label="Maximum items to show"
                                       type="number"
                                       min="1"
@@ -1047,11 +1040,11 @@ export class TodoSwipeCardEditor extends LitElement {
                                       style="width: 100%; margin-top: 8px;"
                                       placeholder="Optional: limit incomplete items"
                                     >
-                                      <div slot="helper">
+                                      <div slot="hint">
                                         Limits number of incomplete items displayed (completed items
                                         always shown)
                                       </div>
-                                    </ha-textfield>
+                                    </ha-input>
                                   </div>
                                 `
                               : ''}
@@ -1082,16 +1075,17 @@ export class TodoSwipeCardEditor extends LitElement {
           <div class="section-header">Display Options</div>
 
           <div class="spacing-field">
-            <ha-textfield
+            <ha-input
               type="number"
               min="0"
               max="100"
               label="Card Spacing (px)"
               .value=${this._card_spacing}
-              @change=${this._cardSpacingChanged}
+              @input=${this._cardSpacingChanged}
               data-config-value="card_spacing"
-              suffix="px"
-            ></ha-textfield>
+            >
+              <span slot="end">px</span>
+            </ha-input>
             <div class="spacing-help-text">Visual gap between cards when swiping (in pixels)</div>
           </div>
 

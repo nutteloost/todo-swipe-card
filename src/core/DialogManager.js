@@ -169,8 +169,15 @@ export class DialogManager {
     // Create dialog with HA's native styling and accessibility
     const dialog = document.createElement('ha-dialog');
     const dialogFooter = document.createElement('ha-dialog-footer');
-    dialog.heading = item ? 'Edit item' : 'Add Todo Item';
+    // HA 2026.3+ ha-dialog (WebAwesome) renders footer content only via the `footer` slot
+    dialogFooter.slot = 'footer';
+    // HA 2026.3+ uses the `header-title` attribute; `heading` is kept for older cores
+    const dialogTitle = item ? 'Edit item' : 'Add Todo Item';
+    dialog.heading = dialogTitle;
+    dialog.setAttribute('header-title', dialogTitle);
     dialog.open = true;
+    // New WebAwesome dialog sizing; the mdc vars remain harmless on older cores
+    dialog.width = 'medium';
     dialog.style.setProperty('--mdc-dialog-min-width', 'min(600px, 95vw)');
     dialog.style.setProperty('--mdc-dialog-max-width', 'min(600px, 95vw)');
 
@@ -734,7 +741,9 @@ export class DialogManager {
     return new Promise((resolve) => {
       const confirmDialog = document.createElement('ha-dialog');
       const confirmDialogFooter = document.createElement('ha-dialog-footer');
+      confirmDialogFooter.slot = 'footer';
       confirmDialog.heading = 'Confirm Deletion';
+      confirmDialog.setAttribute('header-title', 'Confirm Deletion');
       confirmDialog.open = true;
 
       const content = document.createElement('div');
@@ -779,7 +788,9 @@ export class DialogManager {
     // Create confirmation dialog
     const dialog = document.createElement('ha-dialog');
     const dialogFooter = document.createElement('ha-dialog-footer');
+    dialogFooter.slot = 'footer';
     dialog.heading = 'Confirm Deletion';
+    dialog.setAttribute('header-title', 'Confirm Deletion');
     dialog.open = true;
 
     // Create content container

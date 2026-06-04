@@ -69,6 +69,7 @@ export function addSwipeGestures(cardInstance) {
             'mwc-checkbox',
             'paper-checkbox',
             'ha-textfield',
+            'ha-input',
             'ha-slider',
             'paper-slider',
             'ha-icon-button',

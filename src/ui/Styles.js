@@ -835,7 +835,7 @@ export const editorStyles = () => css`
     box-sizing: border-box !important;
   }
 
-  .expanded-content ha-textfield {
+  .expanded-content ha-input {
     width: 100% !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
@@ -850,7 +850,7 @@ export const editorStyles = () => css`
     box-sizing: border-box !important;
   }
 
-  .expanded-content .toggle-option ha-textfield {
+  .expanded-content .toggle-option ha-input {
     width: 100% !important;
     margin: 8px 0 0 0 !important;
     padding: 0 !important;
@@ -871,7 +871,7 @@ export const editorStyles = () => css`
     width: 100%;
   }
 
-  .background-image-row ha-textfield {
+  .background-image-row ha-input {
     width: 100%;
   }
 
@@ -1035,7 +1035,7 @@ export const editorStyles = () => css`
     width: 100%;
   }
 
-  .spacing-field ha-textfield {
+  .spacing-field ha-input {
     width: 100%;
     display: block;
   }

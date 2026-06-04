@@ -37,3 +37,8 @@ RELEASE-GUIDE.md
 RELEASE-NOTES.md
 
 *.map
+
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
