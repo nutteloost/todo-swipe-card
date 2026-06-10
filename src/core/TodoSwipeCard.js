@@ -9,6 +9,7 @@ import { DialogManager } from './DialogManager.js';
 import { CardBuilder } from './CardBuilder.js';
 import { SubscriptionManager } from './SubscriptionManager.js';
 import { addTodoItem, toggleTodoItem, deleteCompletedItems } from '../features/TodoOperations.js';
+import { applyUix } from './UixIntegration.js';
 
 /**
  * TodoSwipeCard: A custom card for Home Assistant to display multiple todo lists with swipe navigation
@@ -698,6 +699,8 @@ export class TodoSwipeCard extends LitElement {
     if (!this._hasValidEntities()) {
       buildPreview(fragment);
       root.appendChild(fragment);
+      // Re-apply UIX to the host (shadow DOM was just rebuilt); no-op without UIX/uix config
+      applyUix(this, this._config?.uix, this._config, 'card');
       this.initialized = true;
       debugLog('Preview build completed');
       return;
@@ -782,6 +785,9 @@ export class TodoSwipeCard extends LitElement {
     setTimeout(() => {
       this._applyTransitionProperties();
     }, 200);
+
+    // Re-apply UIX to the host (shadow DOM was just rebuilt); no-op without UIX/uix config
+    applyUix(this, this._config?.uix, this._config, 'card');
 
     // Mark as initialized AFTER build completes
     this.initialized = true;

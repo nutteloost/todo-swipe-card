@@ -163,7 +163,7 @@ The Todo Swipe Card supports drag-and-drop reordering of todo items for integrat
 **Note**: The Shopping List integration and some third-party integrations may not support drag-and-drop reordering. In these cases, items will display without drag-and-drop functionality.
 
 ## Customizing and Theming
-The Todo Swipe Card provides extensive customization capabilities through two primary methods: Home Assistant themes and card-mod styling. The card supports over fourty CSS variables that control every aspect of its appearance, from basic colors and typography to sophisticated pagination styling and transition effects.
+The Todo Swipe Card provides extensive customization capabilities through several methods: Home Assistant themes, card-mod styling, and [UIX](https://uix.lf.technology) styling. The card supports over fourty CSS variables that control every aspect of its appearance, from basic colors and typography to sophisticated pagination styling and transition effects.
 
 **Simplified Customization Approach**: Todo Swipe Card includes CSS variables that make customization much easier compared to traditional card-mod styling. Instead of having to figure out complex CSS selectors or inspect the card's internal structure, you can simply use these predefined variables to customize colors, sizes, and other visual elements. This means you can create great-looking themes without needing to be a CSS expert or spending time hunting down the right selectors to target specific elements.
 
@@ -200,6 +200,28 @@ card_mod:
       --todo-swipe-card-text-color: #ffffff;
       --todo-swipe-card-background: linear-gradient(45deg, #667eea, #764ba2);
     }
+```
+
+### Method 3: UIX Styling
+
+If you use [UIX](https://uix.lf.technology) instead of card-mod, the card now applies UIX styling natively. Add a `uix:` block to the card to style the whole swipe card, and/or a `uix:` block to an individual list to style just that list. The styling is re-applied on every rebuild, so it survives swipes and config edits. This is a complete no-op when UIX is not installed, so it is safe to leave in your config either way.
+
+```yaml
+type: custom:todo-swipe-card
+uix:
+  style: |
+    :host {
+      --todo-swipe-card-text-color: #ffffff;
+      --todo-swipe-card-background: linear-gradient(45deg, #667eea, #764ba2);
+    }
+entities:
+  - entity: todo.shopping_list
+    # Per-list UIX (styles only this list)
+    uix:
+      style: |
+        :host {
+          --todo-swipe-card-text-color: #ffeb3b;
+        }
 ```
 
 ### Complete CSS Variables Reference

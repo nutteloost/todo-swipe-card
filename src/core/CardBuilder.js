@@ -12,6 +12,7 @@ import {
   createTodoItemElement,
   entitySupportsFeature
 } from '../features/TodoOperations.js';
+import { applyUix } from './UixIntegration.js';
 
 /**
  * CardBuilder handles all card building and rendering functionality for TodoSwipeCard
@@ -214,6 +215,14 @@ export class CardBuilder {
     // Create the main card element
     const cardElement = document.createElement('div');
     cardElement.className = 'native-todo-card';
+
+    // Apply per-list UIX styling if configured (no-op without UIX/uix config)
+    applyUix(
+      cardElement,
+      typeof entityConfig === 'object' ? entityConfig.uix : undefined,
+      entityConfig,
+      'card'
+    );
 
     // Apply background image if configured
     if (typeof entityConfig === 'object' && entityConfig.background_image) {
