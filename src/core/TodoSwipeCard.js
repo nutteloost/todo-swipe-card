@@ -78,6 +78,8 @@ export class TodoSwipeCard extends LitElement {
     return {
       entities: [],
       card_spacing: 15,
+      font_size: 11,
+      title_font_size: 16,
       show_pagination: true,
       show_icons: false,
       show_create: true,
@@ -406,9 +408,17 @@ export class TodoSwipeCard extends LitElement {
     const cardModChanged =
       JSON.stringify(oldConfig.card_mod) !== JSON.stringify(newConfig.card_mod);
     const searchChanged = oldConfig.enable_search !== newConfig.enable_search;
+    const fontSizeChanged = oldConfig.font_size !== newConfig.font_size;
+    const titleFontSizeChanged = oldConfig.title_font_size !== newConfig.title_font_size;
 
     return (
-      entitiesChanged || paginationChanged || createFieldChanged || cardModChanged || searchChanged
+      entitiesChanged ||
+      paginationChanged ||
+      createFieldChanged ||
+      cardModChanged ||
+      searchChanged ||
+      fontSizeChanged ||
+      titleFontSizeChanged
     );
   }
 

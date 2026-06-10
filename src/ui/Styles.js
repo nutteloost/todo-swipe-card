@@ -139,6 +139,8 @@ export function createBaseStyles(config) {
       height: 100%;
       --card-border-radius: var(--ha-card-border-radius, 12px);
       border-radius: var(--card-border-radius);
+      ${Number.isFinite(Number(config?.font_size)) ? `--todo-swipe-card-font-size: ${Number(config.font_size)}px;` : ''}
+      ${Number.isFinite(Number(config?.title_font_size)) ? `--todo-swipe-card-title-font-size: ${Number(config.title_font_size)}px;` : ''}
     }
 
     .card-container {

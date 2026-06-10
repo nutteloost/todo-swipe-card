@@ -116,6 +116,8 @@ export class TodoSwipeCardEditor extends LitElement {
       type: config.type,
       entities: config.entities,
       card_spacing: config.card_spacing,
+      font_size: config.font_size,
+      title_font_size: config.title_font_size,
       show_pagination: config.show_pagination,
       show_create: config.show_create,
       show_addbutton: config.show_addbutton,
@@ -131,6 +133,8 @@ export class TodoSwipeCardEditor extends LitElement {
       'type',
       'entities',
       'card_spacing',
+      'font_size',
+      'title_font_size',
       'show_pagination',
       'show_create',
       'show_addbutton',
@@ -223,12 +227,34 @@ export class TodoSwipeCardEditor extends LitElement {
         }
       }
 
+      let fontSize = config.font_size;
+      if (fontSize === undefined) {
+        fontSize = 11;
+      } else {
+        fontSize = parseInt(fontSize);
+        if (isNaN(fontSize) || fontSize < 1) {
+          fontSize = 11;
+        }
+      }
+
+      let titleFontSize = config.title_font_size;
+      if (titleFontSize === undefined) {
+        titleFontSize = 16;
+      } else {
+        titleFontSize = parseInt(titleFontSize);
+        if (isNaN(titleFontSize) || titleFontSize < 1) {
+          titleFontSize = 16;
+        }
+      }
+
       // Only include custom_card_mod if it exists and has content
       const configUpdate = {
         ...this._config,
         ...config,
         entities,
-        card_spacing: cardSpacing
+        card_spacing: cardSpacing,
+        font_size: fontSize,
+        title_font_size: titleFontSize
       };
 
       // Only add custom_card_mod if it exists in the original config and has meaningful content
@@ -251,6 +277,8 @@ export class TodoSwipeCardEditor extends LitElement {
     return {
       entities: [],
       card_spacing: 15,
+      font_size: 11,
+      title_font_size: 16,
       show_pagination: true,
       show_icons: false,
       show_create: true,
@@ -302,6 +330,14 @@ export class TodoSwipeCardEditor extends LitElement {
 
   get _card_spacing() {
     return this._config.card_spacing !== undefined ? this._config.card_spacing : 15;
+  }
+
+  get _font_size() {
+    return this._config.font_size !== undefined ? this._config.font_size : 11;
+  }
+
+  get _title_font_size() {
+    return this._config.title_font_size !== undefined ? this._config.title_font_size : 16;
   }
 
   get _validEntities() {
@@ -462,6 +498,30 @@ export class TodoSwipeCardEditor extends LitElement {
       const newConfig = this._createOrderedConfig({ ...this._config, card_spacing: value });
       this._config = newConfig;
       debugLog(`Card spacing changed to: ${value}`, newConfig);
+      this._debounceDispatch(newConfig);
+    }
+  }
+
+  _fontSizeChanged(ev) {
+    if (!this._config) return;
+
+    const value = parseInt(ev.target.value);
+    if (!isNaN(value) && value >= 1) {
+      const newConfig = this._createOrderedConfig({ ...this._config, font_size: value });
+      this._config = newConfig;
+      debugLog(`Font size changed to: ${value}`, newConfig);
+      this._debounceDispatch(newConfig);
+    }
+  }
+
+  _titleFontSizeChanged(ev) {
+    if (!this._config) return;
+
+    const value = parseInt(ev.target.value);
+    if (!isNaN(value) && value >= 1) {
+      const newConfig = this._createOrderedConfig({ ...this._config, title_font_size: value });
+      this._config = newConfig;
+      debugLog(`Title font size changed to: ${value}`, newConfig);
       this._debounceDispatch(newConfig);
     }
   }
@@ -1087,6 +1147,41 @@ export class TodoSwipeCardEditor extends LitElement {
               <span slot="end">px</span>
             </ha-input>
             <div class="spacing-help-text">Visual gap between cards when swiping (in pixels)</div>
+          </div>
+
+          <div class="spacing-field">
+            <ha-input
+              type="number"
+              min="6"
+              max="40"
+              label="Font size (px)"
+              .value=${this._font_size}
+              @input=${this._fontSizeChanged}
+              data-config-value="font_size"
+            >
+              <span slot="end">px</span>
+            </ha-input>
+            <div class="spacing-help-text">
+              Size of the todo item text (also affects the add-item field, descriptions and due
+              dates)
+            </div>
+          </div>
+
+          <div class="spacing-field">
+            <ha-input
+              type="number"
+              min="8"
+              max="60"
+              label="Title font size (px)"
+              .value=${this._title_font_size}
+              @input=${this._titleFontSizeChanged}
+              data-config-value="title_font_size"
+            >
+              <span slot="end">px</span>
+            </ha-input>
+            <div class="spacing-help-text">
+              Size of a list's title text (when "Show title" is enabled for that list)
+            </div>
           </div>
 
           <div class="toggle-option">

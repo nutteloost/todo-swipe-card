@@ -91,6 +91,8 @@ This card can be configured using the visual editor or YAML.
 | `clear_search_on_uncheck` | boolean | `false` | Clear search filter when unchecking a completed item |
 | `delete_confirmation` | boolean | `false` | Show confirmation dialog when deleting completed items |
 | `card_spacing` | number | `15` | Space between cards in pixels |
+| `font_size` | number | `11` | Font size of the todo item text in pixels (also affects the add-item field, descriptions and due dates) |
+| `title_font_size` | number | `16` | Font size of a list's title text in pixels (when `show_title` is enabled) |
 
 
 ### Entity Configuration Options
