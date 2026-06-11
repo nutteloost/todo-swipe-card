@@ -659,6 +659,18 @@ export const editorStyles = () => css`
     padding-right: 8px;
   }
 
+  /* Keep the HA 2026.x WebAwesome form controls squared to match the editor chrome
+     and the README's MDC-era look. Setting border-radius on the host is best-effort
+     (only some WebAwesome controls inherit it into their internal field); the
+     --ha-input-border-radius token is the documented hook where available. The
+     surrounding editor chrome stays squared regardless of whether these are honored. */
+  ha-input,
+  ha-entity-picker,
+  ha-select {
+    --ha-input-border-radius: 4px;
+    border-radius: 4px;
+  }
+
   /* Card row styles similar to simple-swipe-card */
   .card-list {
     margin-top: 8px;
@@ -670,9 +682,11 @@ export const editorStyles = () => css`
     align-items: center;
     padding: 8px;
     border: 1px solid var(--divider-color);
-    border-radius: var(--ha-card-border-radius, 4px);
+    border-radius: 4px;
     margin-bottom: 8px;
     background: var(--secondary-background-color);
+    /* Clip the gold accent bar (and icon ripples) to the squared corners */
+    overflow: hidden;
   }
 
   .card-info {
@@ -716,6 +730,9 @@ export const editorStyles = () => css`
   .card-actions ha-icon-button {
     --mdc-icon-button-size: 36px;
     color: var(--secondary-text-color);
+    /* Clip the WebAwesome hover/ripple to a circle (HA 2026.x renders it square) */
+    border-radius: 50%;
+    overflow: hidden;
   }
 
   .card-actions ha-icon-button:hover {
@@ -727,7 +744,7 @@ export const editorStyles = () => css`
     color: var(--secondary-text-color);
     padding: 16px;
     border: 1px dashed var(--divider-color);
-    border-radius: var(--ha-card-border-radius, 4px);
+    border-radius: 4px;
     margin-bottom: 16px;
   }
 
@@ -737,6 +754,9 @@ export const editorStyles = () => css`
     margin: 0 8px 0 0;
     flex-shrink: 0;
     order: -1;
+    /* Clip the WebAwesome hover/ripple to a circle (HA 2026.x renders it square) */
+    border-radius: 50%;
+    overflow: hidden;
     transition:
       color 0.2s ease,
       transform 0.2s ease;
@@ -744,7 +764,6 @@ export const editorStyles = () => css`
 
   .expand-button:hover {
     color: #ffc107;
-    background-color: rgba(255, 193, 7, 0.1);
   }
 
   .expand-button[aria-label*='Collapse'] {
@@ -775,7 +794,7 @@ export const editorStyles = () => css`
     bottom: 0;
     width: 3px;
     background: #ffc107;
-    border-radius: 0 2px 2px 0;
+    border-radius: 4px 0 0 4px;
   }
 
   .clickable-row.expanded {
@@ -791,7 +810,7 @@ export const editorStyles = () => css`
     bottom: 0;
     width: 3px;
     background: #ffc107;
-    border-radius: 0 2px 2px 0;
+    border-radius: 4px 0 0 4px;
   }
 
   .clickable-row .card-actions {
@@ -823,7 +842,7 @@ export const editorStyles = () => css`
     padding: 12px;
     background: var(--secondary-background-color);
     border: 1px solid var(--divider-color);
-    border-radius: var(--ha-card-border-radius, 4px);
+    border-radius: 4px;
   }
 
   .expanded-content ha-entity-picker {

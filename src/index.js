@@ -13,7 +13,7 @@ if (!window.customCards) {
 }
 
 // Ensure registration happens only once
-let registered = window.customCards.some((card) => card.type === 'todo-swipe-card');
+const registered = window.customCards.some((card) => card.type === 'todo-swipe-card');
 if (!registered) {
   window.customCards.push({
     type: 'todo-swipe-card',
