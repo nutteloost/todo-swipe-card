@@ -1,5 +1,5 @@
 import { debugLog } from '../utils/Debug.js';
-import { createCardWithTitle, createIconElement } from '../ui/DomHelpers.js';
+import { createCardWithTitle, createIconElement, parseDueDate } from '../ui/DomHelpers.js';
 import {
   setupSearchForCard,
   matchesSearch,
@@ -480,14 +480,11 @@ export class CardBuilder {
 
       visibleItems = visibleItems.filter((item) => {
         if (item.status === 'completed' || !item.due) {
-          return true;
+          return true; // keep completed items and items without a due date
         }
-        try {
-          const dueDate = new Date(item.due);
-          return dueDate <= now;
-        } catch (e) {
-          return true;
-        }
+        const dueDate = parseDueDate(item.due);
+        // Keep items due today or earlier; if parsing fails, keep the item.
+        return !dueDate || dueDate <= now;
       });
     }
 

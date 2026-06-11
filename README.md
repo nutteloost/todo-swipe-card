@@ -104,6 +104,8 @@ This card can be configured using the visual editor or YAML.
 | `background_image` | string | Optional | Background image URL for this entity |
 | `display_order` | string | none | Sort order: `none`, `alpha_asc`, `alpha_desc`, `duedate_asc`, `duedate_desc` |
 | `icon` | string | Optional | Custom icon for this todo list (e.g., `mdi:cart-variant`) |
+| `hide_future_items` | boolean | `false` | Only show items due today or earlier; items with a future due date are hidden. Completed items and items without a due date are unaffected. |
+| `max_items` | number | Optional | Limit how many incomplete items are shown (completed items are not counted toward the limit). Handy for keeping recurring lists short. |
 
 
 ### Example Configuration
@@ -137,6 +139,8 @@ entities:
     title: "Home Tasks"
     display_order: duedate_asc
     icon: mdi:home-variant
+    hide_future_items: true
+    max_items: 5
   - entity: todo.work_projects
     display_order: none
     icon: mdi:briefcase-variant
